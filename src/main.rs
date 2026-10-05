@@ -187,10 +187,9 @@ fn main_result() -> Result<()> {
             } else {
                 std::thread::available_parallelism()
                     .map(|n| n.get())
-                    .unwrap_or(1)
-                    .min(4)
+                    .unwrap_or(2)
             };
-            let tokio_workers = worker_count.max(2);
+            let tokio_workers = worker_count.clamp(2, 4);
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(tokio_workers)
                 .enable_all()

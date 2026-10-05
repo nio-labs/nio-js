@@ -1,6 +1,6 @@
 # Local benchmark results
 
-Run: 2026-10-05T20:52:33.006499+00:00
+Run: 2026-10-05T21:13:51.672233+00:00
 
 Machine: {'os': '26.3.1', 'architecture': 'arm64', 'cpu': 'Apple M1', 'logical_cpus': 8, 'ram_gib': 8.0}. Versions: {'nio': 'nio-js 0.1.0', 'node': 'v22.21.1', 'bun': '1.4.2', 'deno': 'deno 2.9.4 (stable, release, aarch64-apple-darwin)'}.
 
@@ -8,11 +8,11 @@ Machine: {'os': '26.3.1', 'architecture': 'arm64', 'cpu': 'Apple M1', 'logical_c
 
 | Runtime | Median startup to first HTTP response (ms) | Idle RSS (MiB) |
 |---|---:|---:|
-| nio | 8.17 | 7.29 |
-| node | 59.71 | 46.87 |
-| bun | 11.57 | 13.46 |
-| deno | 23.30 | 34.60 |
-| nio-source | 10.09 | 7.30 |
+| nio | 8.15 | 8.72 |
+| node | 59.92 | 46.84 |
+| bun | 13.53 | 13.48 |
+| deno | 22.35 | 34.58 |
+| nio-source | 8.80 | 8.72 |
 
 ## HTTP throughput and latency
 
@@ -20,23 +20,23 @@ Each cell is the median of three rounds. Latency includes client, loopback netwo
 
 | Route | Concurrency | nio-js req/s | Node req/s | Bun req/s | Deno req/s | nio-js p95 ms | Node p95 ms | Bun p95 ms | Deno p95 ms |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| /constant | 1 | 23,894 | 21,565 | 23,277 | 22,162 | 0.052 | 0.059 | 0.053 | 0.054 |
-| /constant | 8 | 70,563 | 60,389 | 65,973 | 62,653 | 0.185 | 0.221 | 0.205 | 0.198 |
-| /callback | 1 | 16,717 | 22,345 | 23,248 | 22,543 | 0.072 | 0.053 | 0.053 | 0.054 |
-| /callback | 8 | 49,686 | 56,502 | 68,209 | 64,497 | 0.239 | 0.235 | 0.191 | 0.187 |
-| /json | 1 | 13,510 | 19,832 | 22,237 | 19,957 | 0.086 | 0.060 | 0.056 | 0.059 |
-| /json | 8 | 40,265 | 50,170 | 63,823 | 53,156 | 0.288 | 0.251 | 0.201 | 0.218 |
-| /cpu | 1 | 187 | 6,696 | 7,210 | 6,996 | 5.740 | 0.166 | 0.153 | 0.161 |
-| /cpu | 8 | 551 | 8,922 | 9,177 | 9,158 | 15.374 | 1.568 | 1.521 | 0.935 |
+| /constant | 1 | 23,641 | 22,335 | 23,864 | 22,600 | 0.052 | 0.053 | 0.049 | 0.051 |
+| /constant | 8 | 67,244 | 63,037 | 72,242 | 67,476 | 0.196 | 0.208 | 0.182 | 0.180 |
+| /callback | 1 | 18,057 | 22,639 | 24,036 | 22,870 | 0.070 | 0.051 | 0.048 | 0.050 |
+| /callback | 8 | 50,674 | 63,664 | 71,144 | 64,630 | 0.239 | 0.199 | 0.182 | 0.197 |
+| /json | 1 | 14,056 | 20,349 | 22,218 | 19,858 | 0.088 | 0.056 | 0.055 | 0.061 |
+| /json | 8 | 42,360 | 51,838 | 64,689 | 56,031 | 0.279 | 0.242 | 0.199 | 0.205 |
+| /cpu | 1 | 174 | 6,778 | 7,119 | 7,031 | 6.375 | 0.156 | 0.157 | 0.155 |
+| /cpu | 8 | 760 | 9,001 | 9,282 | 9,151 | 13.803 | 1.549 | 1.502 | 0.931 |
 
 ## Variation and interpretation
 
 Throughput varied substantially across rounds. For the fixed-response route at concurrency 8, the observed ranges were:
 
-* nio: 68,943–72,381 requests/s.
-* node: 56,799–61,173 requests/s.
-* bun: 64,433–69,239 requests/s.
-* deno: 62,444–67,135 requests/s.
+* nio: 59,416–73,978 requests/s.
+* node: 50,337–66,131 requests/s.
+* bun: 63,185–73,419 requests/s.
+* deno: 56,421–68,352 requests/s.
 
 Small differences in median fixed-response rates do not establish a throughput winner when the observed ranges overlap. Startup and memory, callbacks, JSON, and CPU must be judged separately. The native constant-response path avoids JavaScript execution per request.
 

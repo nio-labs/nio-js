@@ -46,7 +46,8 @@ struct App {
     routes: Arc<Vec<Route>>,
     exact: Arc<HashMap<String, HashMap<String, usize>>>,
     constants: Arc<Vec<Option<CachedReply>>>,
-    jobs: mpsc::SyncSender<Job>,
+    workers: Arc<Vec<mpsc::SyncSender<Job>>>,
+    round_robin: Arc<std::sync::atomic::AtomicUsize>,
     limits: Limits,
     ids: Arc<AtomicU64>,
     stopping: Arc<AtomicBool>,
@@ -259,92 +260,105 @@ async fn handle(State(app): State<App>, request: Request) -> Response {
     if let Some(reply) = &app.constants[index] {
         return reply.response(id);
     }
-    let search = parts.uri.query().unwrap_or("");
-    let authority = parts
-        .headers
-        .get("host")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("localhost");
-    let url = format!("http://{authority}{}", parts.uri);
-    let mut query = BTreeMap::new();
-    if !search.is_empty() {
-        for (k, v) in url::form_urlencoded::parse(search.as_bytes()) {
-            query.entry(k.into_owned()).or_insert(v.into_owned());
-        }
-    }
-    let headers: Vec<(&str, &str)> = parts
-        .headers
-        .iter()
-        .filter_map(|(k, v)| v.to_str().ok().map(|val| (k.as_str(), val)))
-        .collect();
-    let content_type = parts
-        .headers
-        .get("content-type")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    let bytes = match tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        to_bytes(body, app.limits.body),
-    )
-    .await
-    {
-        Err(_) => {
-            return error(
-                StatusCode::REQUEST_TIMEOUT,
-                "Request body deadline exceeded",
-                id,
-            );
-        }
-        Ok(Err(_)) => {
-            return error(
-                StatusCode::PAYLOAD_TOO_LARGE,
-                "Request body exceeds limit",
-                id,
-            );
-        }
-        Ok(Ok(b)) => b,
-    };
-    let (encoded_body, fields) = if bytes.is_empty() {
-        (String::new(), None)
+    let route_arity = app.routes[index].arity;
+    let input = if route_arity == 0 {
+        String::new()
     } else {
-        let fields = match form(bytes.clone(), content_type, app.limits.body).await {
-            Ok(f) => f,
-            Err(_) => return error(StatusCode::BAD_REQUEST, "Invalid form data", id),
+        let search = parts.uri.query().unwrap_or("");
+        let authority = parts
+            .headers
+            .get("host")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("localhost");
+        let url = format!("http://{authority}{}", parts.uri);
+        let mut query = BTreeMap::new();
+        if !search.is_empty() {
+            for (k, v) in url::form_urlencoded::parse(search.as_bytes()) {
+                query.entry(k.into_owned()).or_insert(v.into_owned());
+            }
+        }
+        let headers: Vec<(&str, &str)> = parts
+            .headers
+            .iter()
+            .filter_map(|(k, v)| v.to_str().ok().map(|val| (k.as_str(), val)))
+            .collect();
+        let content_type = parts
+            .headers
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        let has_body = parts
+            .headers
+            .get("content-length")
+            .is_some_and(|v| v != "0")
+            || parts.headers.contains_key("transfer-encoding");
+        let bytes = if !has_body {
+            Bytes::new()
+        } else {
+            match to_bytes(body, app.limits.body).await {
+                Ok(b) => b,
+                Err(_) => {
+                    return error(
+                        StatusCode::PAYLOAD_TOO_LARGE,
+                        "Request body exceeds limit",
+                        id,
+                    );
+                }
+            }
         };
-        (STANDARD.encode(bytes), fields)
-    };
-    let id_str = id.to_string();
-    let input = match serde_json::to_string(&RequestPayload {
-        method: &method,
-        url: &url,
-        headers: &headers,
-        query: &query,
-        search,
-        params: &params,
-        body: &encoded_body,
-        form: &fields,
-        request_id: &id_str,
-    }) {
-        Ok(s) => s,
-        Err(_) => {
-            return error(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to serialize request",
-                id,
-            );
+        let (encoded_body, fields) = if bytes.is_empty() {
+            (String::new(), None)
+        } else {
+            let fields = match form(bytes.clone(), content_type, app.limits.body).await {
+                Ok(f) => f,
+                Err(_) => return error(StatusCode::BAD_REQUEST, "Invalid form data", id),
+            };
+            (STANDARD.encode(bytes), fields)
+        };
+        let id_str = id.to_string();
+        match serde_json::to_string(&RequestPayload {
+            method: &method,
+            url: &url,
+            headers: &headers,
+            query: &query,
+            search,
+            params: &params,
+            body: &encoded_body,
+            form: &fields,
+            request_id: &id_str,
+        }) {
+            Ok(s) => s,
+            Err(_) => {
+                return error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to serialize request",
+                    id,
+                );
+            }
         }
     };
     let (response_tx, response_rx) = oneshot::channel();
-    if app
-        .jobs
-        .try_send(Job {
-            route: index,
-            input,
-            id,
-            response: response_tx,
-        })
-        .is_err()
-    {
+    let num_workers = app.workers.len();
+    let start_idx = app.round_robin.fetch_add(1, Ordering::Relaxed) % num_workers;
+    let mut job = Some(Job {
+        route: index,
+        input,
+        id,
+        response: response_tx,
+    });
+    for i in 0..num_workers {
+        let idx = (start_idx + i) % num_workers;
+        match app.workers[idx].try_send(job.take().unwrap()) {
+            Ok(()) => break,
+            Err(mpsc::TrySendError::Full(j)) => {
+                job = Some(j);
+            }
+            Err(mpsc::TrySendError::Disconnected(_)) => {
+                return error(StatusCode::SERVICE_UNAVAILABLE, "Execution unavailable", id);
+            }
+        }
+    }
+    if job.is_some() {
         return error(
             StatusCode::SERVICE_UNAVAILABLE,
             "Execution queue is full or unavailable",
@@ -385,18 +399,19 @@ pub async fn serve(
     workers: usize,
 ) -> Result<()> {
     let workers = workers.max(1);
-    let queue_size = (workers * 32).max(64);
-    let (jobs, receiver) = mpsc::sync_channel::<Job>(queue_size);
-    let receiver = Arc::new(std::sync::Mutex::new(receiver));
+    let per_worker_queue = 32;
+    let total_queue_size = workers * per_worker_queue;
     let (ready_tx, ready_rx) = mpsc::channel();
     let (done_tx, done_rx) = mpsc::channel::<()>();
     let stopping = Arc::new(AtomicBool::new(false));
+    let mut senders = Vec::with_capacity(workers);
 
     for worker_id in 0..workers {
+        let (worker_tx, worker_rx) = mpsc::sync_channel::<Job>(per_worker_queue);
+        senders.push(worker_tx);
         let stop_worker = stopping.clone();
         let worker_limits = limits.clone();
         let worker_capsule = capsule.clone();
-        let worker_receiver = receiver.clone();
         let ready = ready_tx.clone();
         let done = done_tx.clone();
         std::thread::Builder::new()
@@ -413,17 +428,7 @@ pub async fn serve(
                 if ready.send(Ok(engine.routes.clone())).is_err() {
                     return;
                 }
-                loop {
-                    let job = {
-                        let rx = match worker_receiver.lock() {
-                            Ok(guard) => guard,
-                            Err(poisoned) => poisoned.into_inner(),
-                        };
-                        match rx.recv() {
-                            Ok(job) => job,
-                            Err(_) => break,
-                        }
-                    };
+                while let Ok(job) = worker_rx.recv() {
                     if job.response.is_closed() || stop_worker.load(Ordering::Relaxed) {
                         continue;
                     }
@@ -463,7 +468,7 @@ pub async fn serve(
     let routes = initial_routes.unwrap_or_default();
     if routes.is_empty() {
         stopping.store(true, Ordering::Relaxed);
-        drop(jobs);
+        drop(senders);
         drop(done_tx);
         let _ = tokio::task::spawn_blocking(move || {
             let _ = done_rx.recv();
@@ -488,11 +493,12 @@ pub async fn serve(
         routes: Arc::new(routes),
         exact: Arc::new(exact),
         constants: Arc::new(constants),
-        jobs,
+        workers: Arc::new(senders),
+        round_robin: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         limits: limits.clone(),
         ids: Arc::new(AtomicU64::new(1)),
         stopping: stopping.clone(),
-        requests: Arc::new(tokio::sync::Semaphore::new(queue_size)),
+        requests: Arc::new(tokio::sync::Semaphore::new(total_queue_size)),
     };
     let router = Router::new().fallback(handle).with_state(app);
     let listener = tokio::net::TcpListener::bind(address).await?;

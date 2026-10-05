@@ -38,6 +38,36 @@ pub struct Reply {
 }
 impl<'js> FromJs<'js> for Reply {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
+        if let Some(array) = value.as_array() {
+            let status: u16 = array.get(0)?;
+            let fast_type: u8 = array.get(1)?;
+            let raw: Value = array.get(2)?;
+            let body = if raw.is_string() {
+                Bytes::from(String::from_js(ctx, raw)?.into_bytes())
+            } else {
+                let array = TypedArray::<u8>::from_js(ctx, raw)?;
+                let bytes = unsafe { array.as_bytes() }.ok_or(rquickjs::Error::Unknown)?;
+                Bytes::copy_from_slice(bytes)
+            };
+            let headers = if fast_type != 0 {
+                Vec::new()
+            } else {
+                let headers: Array = array.get(3)?;
+                headers
+                    .iter::<Array>()
+                    .map(|pair| {
+                        let pair = pair?;
+                        Ok((pair.get(0)?, pair.get(1)?))
+                    })
+                    .collect::<rquickjs::Result<Vec<(String, String)>>>()?
+            };
+            return Ok(Self {
+                status,
+                headers,
+                body,
+                fast_type,
+            });
+        }
         let object = Object::from_js(ctx, value)?;
         let raw: Value = object.get("body")?;
         let body = if raw.is_string() {
@@ -74,14 +104,17 @@ pub struct Route {
     pub method: String,
     pub path: String,
     pub constant: Option<Reply>,
+    pub arity: usize,
 }
 impl<'js> FromJs<'js> for Route {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
         let object = Object::from_js(ctx, value)?;
+        let arity: usize = object.get("arity").unwrap_or(0);
         Ok(Self {
             method: object.get("method")?,
             path: object.get("path")?,
             constant: object.get("constant")?,
+            arity,
         })
     }
 }
@@ -285,16 +318,15 @@ impl Engine {
         };
         ensure!(reply.body.len() <= self.limits.body, "response too large");
         // Finish a microtask checkpoint even when the handler returns synchronously.
-        loop {
+        while match self.runtime.execute_pending_job() {
+            Ok(true) => true,
+            Ok(false) => false,
+            Err(e) => bail!("JavaScript job failed: {e:?}"),
+        } {
             ensure!(
                 Instant::now() < *self.deadline.lock().unwrap(),
                 "handler deadline exceeded"
             );
-            match self.runtime.execute_pending_job() {
-                Ok(true) => {}
-                Ok(false) => break,
-                Err(e) => bail!("JavaScript job failed: {e:?}"),
-            }
         }
         Ok(reply)
     }

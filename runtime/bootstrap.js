@@ -149,7 +149,7 @@
       body = result;
       if (options.headers === undefined && (options.status === undefined || options.status === 200)) {
         if (body.length > __nioMaxBody) throw new RangeError('Response exceeds byte limit');
-        return { status: 200, fastType: 1, body };
+        return [200, 1, body];
       }
       type = 'text/plain; charset=utf-8';
     } else if (result instanceof Blob) {
@@ -158,7 +158,7 @@
       body = JSON.stringify(result);
       if (options.headers === undefined && (options.status === undefined || options.status === 200)) {
         if (body.length > __nioMaxBody) throw new RangeError('Response exceeds byte limit');
-        return { status: 200, fastType: 2, body };
+        return [200, 2, body];
       }
       type = 'application/json; charset=utf-8';
     } else throw new TypeError('Unsupported handler return value');
@@ -172,29 +172,41 @@
     }
     const status = options.status ?? 200;
     if (!Number.isInteger(status) || status < 200 || status > 599) throw new TypeError('Invalid response status');
-    return { status, headers, body, fastType: 0 };
+    return [status, 0, body, headers];
   };
   globalThis.__nioRoutes = () => {
     closed = true;
-    return routes.map(r => ({ method:r.method, path:r.path, constant:typeof r.handler !== 'function' ? encodeReply(r.handler) : null }));
+    return routes.map(r => ({
+      method: r.method,
+      path: r.path,
+      constant: typeof r.handler !== 'function' ? encodeReply(r.handler) : null,
+      arity: typeof r.handler === 'function' ? (r.handler.length || 0) : 0,
+    }));
   };
-  class NioRequest {
-    constructor(parsed) {
-      this.method = parsed.method;
-      this.url = parsed.url;
-      this.search = parsed.search || '';
-      this.params = parsed.params || {};
-      this.requestId = parsed.requestId;
-      this._raw = parsed;
+  class LazyRequest {
+    constructor(input) {
+      this._input = input;
+      this._parsed = null;
       this._headers = null;
       this._searchParams = null;
+      this._query = null;
+      this._consumed = false;
       this._boundText = null;
       this._boundJson = null;
       this._boundBlob = null;
       this._boundFormData = null;
     }
+    _getParsed() {
+      if (!this._parsed) this._parsed = typeof this._input === 'string' ? JSON.parse(this._input) : this._input;
+      return this._parsed;
+    }
+    get method() { return this._getParsed().method; }
+    get url() { return this._getParsed().url; }
+    get search() { return this._getParsed().search || ''; }
+    get params() { return this._getParsed().params || {}; }
+    get requestId() { return this._getParsed().requestId; }
     get headers() {
-      if (!this._headers) this._headers = new Headers(this._raw.headers || []);
+      if (!this._headers) this._headers = new Headers(this._getParsed().headers || []);
       return this._headers;
     }
     set headers(v) { this._headers = v; }
@@ -215,7 +227,8 @@
     _getBytes() {
       if (this._consumed) throw new TypeError('Body already consumed');
       this._consumed = true;
-      return this._raw.body ? new Uint8Array(__nioUnbase64(this._raw.body)) : new Uint8Array(0);
+      const b = this._getParsed().body;
+      return b ? new Uint8Array(__nioUnbase64(b)) : new Uint8Array(0);
     }
     get text() {
       return this._boundText || (this._boundText = async () => __nioDecode(Array.from(this._getBytes())));
@@ -229,9 +242,10 @@
     get formData() {
       return this._boundFormData || (this._boundFormData = async () => {
         this._getBytes();
-        if (!this._raw.form) throw new TypeError('Expected multipart/form-data or application/x-www-form-urlencoded');
+        const rawForm = this._getParsed().form;
+        if (!rawForm) throw new TypeError('Expected multipart/form-data or application/x-www-form-urlencoded');
         const form = new FormData();
-        for (const field of this._raw.form) {
+        for (const field of rawForm) {
           if (field.filename !== null) form.append(field.name, new File([new Uint8Array(__nioUnbase64(field.body))], field.filename, { type: field.type ?? '' }));
           else form.append(field.name, __nioDecode(__nioUnbase64(field.body)));
         }
@@ -239,10 +253,11 @@
       });
     }
   }
+  const emptyReq = new LazyRequest({ method: 'GET', url: '', headers: [], query: {}, search: '', params: {}, body: '', form: null });
   globalThis.__nioDispatch = (route, input) => {
-    const req = new NioRequest(JSON.parse(input));
     const handler = routes[route]?.handler;
     if (typeof handler !== 'function') throw new Error('Invalid callback route');
+    const req = handler.length === 0 ? emptyReq : new LazyRequest(input);
     const result = handler(req);
     return result !== null && (typeof result === 'object' || typeof result === 'function') && typeof result.then === 'function'
       ? Promise.resolve(result).then(encodeReply) : encodeReply(result);
