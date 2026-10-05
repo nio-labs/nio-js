@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "transformer": "oxc-0.152",
+  "remote": {
+    "https://esm.sh/zod@3.23.8/es2022/zod.mjs": {
+      "resolved": "https://esm.sh/zod@3.23.8/es2022/zod.mjs",
+      "integrity": "6ee0474ec5a765b112eca12525d7e30c8e77eedbe2f2ac5e19f2af468b759517"
+    },
+    "https://esm.sh/zod@3.23.8?target=es2022": {
+      "resolved": "https://esm.sh/zod@3.23.8?target=es2022",
+      "integrity": "443e3266b295585cfbe5951907b302f50f13d0615cf386f20aaa097125982dcb"
+    }
+  }
+}

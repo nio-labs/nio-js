@@ -1,0 +1,7 @@
+/target/
+/.nio-js-cache/
+*.njs
+/benchmarks/.tools/
+/benchmarks/loadgen/target/
+/benchmarks/__pycache__/
+.DS_Store
