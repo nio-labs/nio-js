@@ -11,24 +11,34 @@ The engine is embedded through `rquickjs` 0.14, which currently bundles the Quic
 
 ## Run
 
-After a release is published, install the native CLI through npm:
+After a release is published, install the standalone CLI (macOS, Linux, or Termux):
 
 ```sh
-npx @nio-labs/nio-js run app.ts
-# Or install it once:
-npm install -g @nio-labs/nio-js
+curl -fsSL https://raw.githubusercontent.com/nio-labs/nio-js/main/install.sh | sh
 nio-js run app.ts
 ```
 
-The npm launcher requires Node 18+ and installs the matching native binary as an optional dependency. Standalone binaries from [GitHub Releases](https://github.com/nio-labs/nio-js/releases) run without Node. Release configuration and publishing instructions are in [docs/RELEASING.md](docs/RELEASING.md).
+The installer detects your platform, downloads the latest stable release, verifies its SHA-256 checksum, and installs to `$HOME/.local/bin` (or `$PREFIX/bin` in Termux). It requires curl or wget and sha256sum or shasum. Add the printed directory to PATH if needed. Node and root access are unnecessary.
+
+For a specific version or directory, download the script and pass options:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/nio-labs/nio-js/main/install.sh -o install.sh
+sh install.sh --version v0.1.0 --install-dir "$HOME/.local/bin"
+```
+
+Linux releases require GNU libc (built on Ubuntu 22.04); musl distributions are not supported. Windows and npm users can use `npm install -g @nio-labs/nio-js` or `npx @nio-labs/nio-js run app.ts`. The npm launcher requires Node 18+. Standalone binaries are also available from [GitHub Releases](https://github.com/nio-labs/nio-js/releases). Release configuration is in [docs/RELEASING.md](docs/RELEASING.md). Installation downloads become available once the first release is published.
 
 Android ARM64 binaries are included for a Termux preview. Installation instructions and the device-validation scope are in [docs/TERMUX.md](docs/TERMUX.md).
 
-From this directory:
+To build from source, run from this directory and install the compiled executable:
 
 ```bash
 cargo build --release --locked
-./target/release/nio-js run examples/server.ts --port 3000
+mkdir -p "$HOME/.local/bin"
+install -m 755 target/release/nio-js "$HOME/.local/bin/nio-js"
+export PATH="$HOME/.local/bin:$PATH"
+nio-js run examples/server.ts --port 3000
 ```
 
 Visit `http://localhost:3000/`. The server binds to `127.0.0.1` by default. Use `--host 0.0.0.0` to listen on other interfaces.
@@ -44,13 +54,25 @@ curl -F file=@examples/assets/hello.txt http://localhost:3000/upload
 
 TypeScript is transformed with Oxc. This is not type checking. Include [types/nio.d.ts](types/nio.d.ts) in your editor's TypeScript project; DOM declarations describe the familiar web object types, but runtime support is a subset.
 
+## Production deployment
+
+Build an application capsule and run it on your server:
+
+```sh
+nio-js build app.ts -o app.njs
+nio-js verify app.njs
+nio-js run app.njs --host 127.0.0.1 --port 3000
+```
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for locked dependency builds, Linux systemd setup, HTTPS, health checks, updates, and rollbacks.
+
 ## Capsules
 
 ```bash
-./target/release/nio-js build examples/server.ts -o server.njs
-./target/release/nio-js inspect server.njs
-./target/release/nio-js verify server.njs
-./target/release/nio-js run server.njs --port 3000
+nio-js build examples/server.ts -o server.njs
+nio-js inspect server.njs
+nio-js verify server.njs
+nio-js run server.njs --port 3000
 ```
 
 Capsules are versioned JSON documents containing JavaScript modules, dependency edges, per-object SHA-256 digests, source maps, assets, and required network destinations. They contain portable source, not engine bytecode. Execution requires neither the original source nor the dependency cache and performs no dependency downloads.
@@ -72,9 +94,9 @@ import { z } from 'https://unpkg.com/zod@3.23.8/lib/index.mjs'
 ```
 
 ```bash
-./target/release/nio-js build examples/cdn.ts -o cdn.njs
-./target/release/nio-js build examples/unpkg.ts --update -o unpkg.njs
-./target/release/nio-js build examples/cdn.ts --offline --frozen -o cdn.njs
+nio-js build examples/cdn.ts -o cdn.njs
+nio-js build examples/unpkg.ts --update -o unpkg.njs
+nio-js build examples/cdn.ts --offline --frozen -o cdn.njs
 ```
 
 Preparation allows `esm.sh`, `unpkg.com`, and `esm.unpkg.com` by default. Add another exact hostname with `--allow-import example.com`. Redirect destinations must also be allowed. Private/reserved network addresses are denied for module downloads.
@@ -94,7 +116,7 @@ Bare imports other than the reserved `'nio.js'` require an explicit import map:
 ```
 
 ```bash
-./target/release/nio-js build server.ts --import-map imports.json -o server.njs
+nio-js build server.ts --import-map imports.json -o server.njs
 ```
 
 Local imports are confined to the entrypoint's directory after canonicalization, including symlink resolution. HTTPS relative imports resolve against the final redirected URL. Literal dynamic imports are prepared; computed dynamic imports, import attributes, Node built-ins, native addons, and automatic CommonJS execution are rejected.
@@ -131,9 +153,9 @@ get('/docs', redirect('https://example.com/docs'))
 ```
 
 ```bash
-./target/release/nio-js build examples/assets.ts \
+nio-js build examples/assets.ts \
   --asset hello.txt=examples/assets/hello.txt -o assets.njs
-./target/release/nio-js run assets.njs
+nio-js run assets.njs
 ```
 
 Assets are read only during preparation and embedded with digests. Applications have no general filesystem API. Native directory mounts are deferred.
@@ -151,7 +173,7 @@ Selected interoperability APIs include UTF-8 TextEncoder/TextDecoder, read-orien
 Application networking is denied by default, separately from module preparation:
 
 ```bash
-./target/release/nio-js run server.njs --allow-net api.example.com
+nio-js run server.njs --allow-net api.example.com
 ```
 
 A hostname grant permits that host's HTTP/HTTPS ports; `host:port` restricts it to that port. Every redirect is checked. DNS addresses are checked and pinned for each connection; private/reserved destinations require both an explicit destination grant and `--allow-private-network`. Proxy environment variables are ignored.
@@ -161,8 +183,8 @@ Outbound fetch currently supports GET with no custom headers, body, or cancellat
 Declare required hosts in a capsule:
 
 ```bash
-./target/release/nio-js build server.ts --require-net api.example.com -o server.njs
-./target/release/nio-js run server.njs --allow-net api.example.com
+nio-js build server.ts --require-net api.example.com -o server.njs
+nio-js run server.njs --allow-net api.example.com
 ```
 
 Startup fails when declared destinations lack operator grants. Declared requirements are explicit; they are not inferred from arbitrary code.

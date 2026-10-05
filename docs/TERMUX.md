@@ -8,31 +8,19 @@ CI cross-builds ARM64 and x86_64 Android binaries, then runs the x86_64 build in
 
 Use a current Termux installation from its [official installation instructions](https://github.com/termux/termux-app#installation). Run `uname -m`; the ARM64 binary requires `aarch64`.
 
-With Termux's Node package:
+The default installer needs no Node:
 
 ```sh
 pkg update
-pkg install nodejs
-npx @nio-labs/nio-js --version
-npx @nio-labs/nio-js run app.ts
-```
-
-The launcher selects `@nio-labs/nio-js-android-arm64` when Node reports `process.platform === 'android'` and `process.arch === 'arm64'`. Keep optional dependencies enabled. The runtime itself executes JavaScript through QuickJS, not Node.
-
-For the standalone executable, Node is unnecessary:
-
-```sh
 pkg install curl coreutils
-cd "$HOME"
-curl -fLO https://github.com/nio-labs/nio-js/releases/download/v0.1.0/nio-js-android-arm64
-curl -fLO https://github.com/nio-labs/nio-js/releases/download/v0.1.0/nio-js-android-arm64.sha256
-sha256sum -c nio-js-android-arm64.sha256
-install -m 755 nio-js-android-arm64 "$PREFIX/bin/nio-js"
+curl -fsSL https://raw.githubusercontent.com/nio-labs/nio-js/main/install.sh | sh
 nio-js --version
 nio-js run app.ts --host 127.0.0.1 --port 3000
 ```
 
-Substitute the published version you want. The initial version is `0.1.0`; these URLs become available when that tag is released successfully. Keep the executable in Termux's private filesystem, not `/sdcard` or shared storage. No proot or root is required by the runtime.
+It detects Android ARM64, verifies the release checksum, and installs in `$PREFIX/bin`. For a pinned version, download the script and run `sh install.sh --version v0.1.0`. These downloads become available after the first successful release. Keep executables in Termux's private filesystem, not `/sdcard` or shared storage. No proot or root is required by the runtime.
+
+npm remains optional: `pkg install nodejs`, then `npx @nio-labs/nio-js --version`. The launcher selects `@nio-labs/nio-js-android-arm64` when Node reports Android ARM64. Keep optional dependencies enabled.
 
 ## Real-device validation still needed
 

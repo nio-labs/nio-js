@@ -95,7 +95,7 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.98.1
         with:
           components: rustfmt, clippy
           targets: ${{ matrix.rust_target }}
@@ -173,6 +173,11 @@ jobs:
         run: npm pack . --ignore-scripts --pack-destination dist/artifacts/npm --json > dist/artifacts/npm/pack-launcher.json
       - name: Verify every artifact and prepare the publish plan
         run: node scripts/prepare-release.cjs
+      - name: Include the standalone installer
+        run: |
+          cp install.sh dist/artifacts/release/install.sh
+          cd dist/artifacts/release
+          sha256sum install.sh >> SHA256SUMS
       - name: Publish platform packages, then the launcher
         run: node scripts/publish-npm.cjs
       - name: Create or update the GitHub release
