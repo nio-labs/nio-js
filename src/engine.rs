@@ -34,6 +34,7 @@ pub struct Reply {
     pub status: u16,
     pub headers: Vec<(String, String)>,
     pub body: Bytes,
+    pub fast_type: u8,
 }
 impl<'js> FromJs<'js> for Reply {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
@@ -47,18 +48,24 @@ impl<'js> FromJs<'js> for Reply {
             let bytes = unsafe { array.as_bytes() }.ok_or(rquickjs::Error::Unknown)?;
             Bytes::copy_from_slice(bytes)
         };
-        let headers: Array = object.get("headers")?;
-        let headers = headers
-            .iter::<Array>()
-            .map(|pair| {
-                let pair = pair?;
-                Ok((pair.get(0)?, pair.get(1)?))
-            })
-            .collect::<rquickjs::Result<Vec<(String, String)>>>()?;
+        let fast_type: u8 = object.get("fastType").unwrap_or(0);
+        let headers = if fast_type != 0 {
+            Vec::new()
+        } else {
+            let headers: Array = object.get("headers")?;
+            headers
+                .iter::<Array>()
+                .map(|pair| {
+                    let pair = pair?;
+                    Ok((pair.get(0)?, pair.get(1)?))
+                })
+                .collect::<rquickjs::Result<Vec<(String, String)>>>()?
+        };
         Ok(Self {
             status: object.get("status")?,
             headers,
             body,
+            fast_type,
         })
     }
 }

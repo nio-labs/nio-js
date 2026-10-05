@@ -1,4 +1,4 @@
-# nio-js / Node / Bun benchmarks
+# nio-js / Node / Bun / Deno benchmarks
 
 This suite measures the current preview on one machine. It compares native HTTP APIs without application frameworks, using the same response bytes and the same JavaScript workload functions.
 
@@ -15,13 +15,13 @@ unzip -q benchmarks/.tools/bun.zip -d benchmarks/.tools
 python3 benchmarks/run.py
 ```
 
-Requires Node on PATH, Python 3, macOS `ps`/`sysctl`, and permission to bind localhost sockets. Bun stays inside the ignored tools directory. Pin Node to the version recorded in `results.json` for a closer reproduction. nio-js uses a release build and the normal default limits, including eight concurrent HTTP requests and one JavaScript worker.
+Requires Node and Deno on PATH, Python 3, macOS `ps`/`sysctl`, and permission to bind localhost sockets. Bun stays inside the ignored tools directory. Pin Node and Deno to the versions recorded in `results.json` for a closer reproduction. nio-js uses a release build and the normal default limits, with multi-worker JavaScript dispatch.
 
-Use `python3 benchmarks/run.py --no-baseline` for a three-runtime comparison even when a saved baseline binary exists. The optimization before/after comparison is retained in [OPTIMIZATION.md](OPTIMIZATION.md) and [optimization.json](optimization.json).
+Use `python3 benchmarks/run.py --no-baseline` for a four-runtime comparison even when a saved baseline binary exists. The optimization before/after comparison is retained in [OPTIMIZATION.md](OPTIMIZATION.md) and [optimization.json](optimization.json).
 
 ## Workloads
 
-* `/constant`: cached Hello World bytes. nio-js uses its native constant-route path; Node uses `http.createServer`, and Bun uses `Bun.serve` with a cached byte buffer inside its handler. This compares these implementations, including nio-js's architectural shortcut. It does not compare pure JavaScript engine speed or Bun's optimized static `routes` API.
+* `/constant`: cached Hello World bytes. nio-js uses its native constant-route path; Node uses `http.createServer`, Bun uses `Bun.serve`, and Deno uses `Deno.serve` with a cached byte buffer inside its handler. This compares these implementations, including nio-js's architectural shortcut. It does not compare pure JavaScript engine speed or Bun's optimized static `routes` API.
 * `/callback`: Hello World returned by a JavaScript callback.
 * `/json`: creates 20 objects and serializes them for each request.
 * `/cpu`: the identical 100,000-iteration integer loop with `Math.imul`, followed by a text response. This intentionally emphasizes interpreted JavaScript versus JIT execution. It is one synthetic workload, not a general engine benchmark.

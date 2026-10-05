@@ -41,6 +41,8 @@ enum Command {
         timeout_ms: u64,
         #[arg(long, default_value = "1048576")]
         max_body: usize,
+        #[arg(long, default_value = "0")]
+        workers: usize,
     },
     Build {
         file: PathBuf,
@@ -150,6 +152,7 @@ fn main_result() -> Result<()> {
             memory_mb,
             timeout_ms,
             max_body,
+            workers,
         } => {
             ensure!(
                 (8..=1024).contains(&memory_mb),
@@ -163,6 +166,7 @@ fn main_result() -> Result<()> {
                 (1024..=16 * 1024 * 1024).contains(&max_body),
                 "body limit must be between 1 KiB and 16 MiB"
             );
+            ensure!(workers <= 64, "workers must not exceed 64");
             let c = if file.extension().is_some_and(|s| s == "njs") {
                 prepare::read_capsule(&file)?
             } else {
@@ -178,8 +182,17 @@ fn main_result() -> Result<()> {
                 },
                 in_flight: Arc::new(AtomicUsize::new(0)),
             };
+            let worker_count = if workers > 0 {
+                workers
+            } else {
+                std::thread::available_parallelism()
+                    .map(|n| n.get())
+                    .unwrap_or(1)
+                    .min(4)
+            };
+            let tokio_workers = worker_count.max(2);
             let runtime = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(2)
+                .worker_threads(tokio_workers)
                 .enable_all()
                 .build()?;
             runtime
@@ -187,6 +200,7 @@ fn main_result() -> Result<()> {
                     Arc::new(c),
                     limits,
                     std::net::SocketAddr::new(host, port),
+                    worker_count,
                 ))
                 .context("service failed")?;
         }

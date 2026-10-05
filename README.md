@@ -233,11 +233,11 @@ Defaults:
 | Individual source or asset | 4 MiB |
 | Serialized capsule | 32 MiB |
 
-Callbacks execute serially on one dedicated QuickJS thread, with two threads for HTTP I/O. Synchronous handlers avoid promise scheduling; asynchronous handlers and thenables drive the job queue. Both finish a microtask checkpoint within the invocation deadline. Request headers and search parameters are constructed when first accessed. Text/JSON response strings and binary buffers pass directly to Rust without a base64/JSON response envelope. Exact routes are indexed, and constant response headers and bytes are cached.
+Callbacks execute on a multi-worker QuickJS engine pool (auto-scaled up to 4 parallel workers on multi-core systems, configurable via `--workers`) with multi-threaded HTTP I/O. Synchronous handlers avoid promise scheduling; asynchronous handlers and thenables drive the job queue. Both finish a microtask checkpoint within the invocation deadline. Request headers and search parameters are constructed when first accessed. Text/JSON response strings and binary buffers pass directly to Rust without a base64/JSON response envelope. Exact routes are indexed, and constant response headers and bytes are cached.
 
 Queue waiting has a separate bounded timeout. Request-body reads have a five-second deadline. Shutdown stops accepting requests and drains within a bounded window.
 
-The QuickJS budget does not include every host allocation. Host buffers have explicit limits, but this preview is not a hardened sandbox for hostile code. Multi-worker execution, invocation identity, per-principal authorization, whole-process accounting, and OS isolation are future work.
+The QuickJS budget does not include every host allocation. Host buffers have explicit limits, but this preview is not a hardened sandbox for hostile code. Invocation identity, per-principal authorization, whole-process accounting, and OS isolation are future work.
 
 ## Validation
 
@@ -255,7 +255,7 @@ cargo test --locked --test service cdn_imports_execute_then_rebuild_offline -- -
 
 Tests exercise HTTP behavior, uploads, source-to-capsule execution after deleting sources, tamper detection, capabilities, limits, failure recovery, source maps, and live esm.sh/UNPKG dependencies with offline rebuilding.
 
-Only macOS ARM64 has been exercised in this workspace. Linux, Windows, Termux, and experimental iSH require separate builds and device validation. A local Node/Bun comparison and reproducible benchmark suite are in [benchmarks/RESULTS.md](benchmarks/RESULTS.md) and [benchmarks/README.md](benchmarks/README.md). Those measurements cover one machine and four small workloads.
+Only macOS ARM64 has been exercised in this workspace. Linux, Windows, Termux, and experimental iSH require separate builds and device validation. A local Node/Bun/Deno comparison and reproducible benchmark suite are in [benchmarks/RESULTS.md](benchmarks/RESULTS.md) and [benchmarks/README.md](benchmarks/README.md). Those measurements cover one machine and four small workloads.
 
 ## Scope
 

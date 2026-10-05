@@ -28,6 +28,19 @@ struct Job {
     id: u64,
     response: oneshot::Sender<Result<Reply, String>>,
 }
+#[derive(serde::Serialize)]
+struct RequestPayload<'a> {
+    method: &'a str,
+    url: &'a str,
+    headers: &'a [(&'a str, &'a str)],
+    query: &'a BTreeMap<String, String>,
+    search: &'a str,
+    params: &'a BTreeMap<String, String>,
+    body: &'a str,
+    form: &'a Option<Vec<Value>>,
+    #[serde(rename = "requestId")]
+    request_id: &'a str,
+}
 #[derive(Clone)]
 struct App {
     routes: Arc<Vec<Route>>,
@@ -49,20 +62,36 @@ impl CachedReply {
     fn new(reply: Reply) -> Result<Self> {
         let status = StatusCode::from_u16(reply.status)?;
         let mut headers = HeaderMap::new();
-        for (key, value) in reply.headers {
-            let name = HeaderName::try_from(key)?;
-            if matches!(
-                name.as_str(),
-                "connection"
-                    | "transfer-encoding"
-                    | "content-length"
-                    | "upgrade"
-                    | "keep-alive"
-                    | "trailer"
-            ) {
-                continue;
+        match reply.fast_type {
+            1 => {
+                headers.insert(
+                    "content-type",
+                    HeaderValue::from_static("text/plain; charset=utf-8"),
+                );
             }
-            headers.insert(name, HeaderValue::try_from(value)?);
+            2 => {
+                headers.insert(
+                    "content-type",
+                    HeaderValue::from_static("application/json; charset=utf-8"),
+                );
+            }
+            _ => {
+                for (key, value) in reply.headers {
+                    let name = HeaderName::try_from(key)?;
+                    if matches!(
+                        name.as_str(),
+                        "connection"
+                            | "transfer-encoding"
+                            | "content-length"
+                            | "upgrade"
+                            | "keep-alive"
+                            | "trailer"
+                    ) {
+                        continue;
+                    }
+                    headers.insert(name, HeaderValue::try_from(value)?);
+                }
+            }
         }
         Ok(Self {
             status,
@@ -184,8 +213,9 @@ async fn handle(State(app): State<App>, request: Request) -> Response {
     if app.stopping.load(Ordering::Relaxed) {
         return error(StatusCode::SERVICE_UNAVAILABLE, "Service is stopping", id);
     }
-    let method = request.method().as_str().to_owned();
-    let path = request.uri().path();
+    let (parts, body) = request.into_parts();
+    let method = parts.method.as_str().to_owned();
+    let path = parts.uri.path();
     let mut candidates = Vec::new();
     let mut allowed = Vec::new();
     if let Some(index) = app
@@ -229,35 +259,32 @@ async fn handle(State(app): State<App>, request: Request) -> Response {
     if let Some(reply) = &app.constants[index] {
         return reply.response(id);
     }
-    let search = request.uri().query().unwrap_or("").to_owned();
-    let authority = request
-        .headers()
+    let search = parts.uri.query().unwrap_or("");
+    let authority = parts
+        .headers
         .get("host")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("localhost");
-    let url = format!("http://{authority}{}", request.uri());
+    let url = format!("http://{authority}{}", parts.uri);
     let mut query = BTreeMap::new();
-    for (k, v) in url::form_urlencoded::parse(search.as_bytes()) {
-        query.entry(k.into_owned()).or_insert(v.into_owned());
+    if !search.is_empty() {
+        for (k, v) in url::form_urlencoded::parse(search.as_bytes()) {
+            query.entry(k.into_owned()).or_insert(v.into_owned());
+        }
     }
-    let headers: Vec<_> = request
-        .headers()
+    let headers: Vec<(&str, &str)> = parts
+        .headers
         .iter()
-        .filter_map(|(k, v)| {
-            v.to_str()
-                .ok()
-                .map(|v| (k.as_str().to_owned(), v.to_owned()))
-        })
+        .filter_map(|(k, v)| v.to_str().ok().map(|val| (k.as_str(), val)))
         .collect();
-    let content_type = request
-        .headers()
+    let content_type = parts
+        .headers
         .get("content-type")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_owned();
+        .unwrap_or("");
     let bytes = match tokio::time::timeout(
         std::time::Duration::from_secs(5),
-        to_bytes(request.into_body(), app.limits.body),
+        to_bytes(body, app.limits.body),
     )
     .await
     {
@@ -277,11 +304,36 @@ async fn handle(State(app): State<App>, request: Request) -> Response {
         }
         Ok(Ok(b)) => b,
     };
-    let fields = match form(bytes.clone(), &content_type, app.limits.body).await {
-        Ok(f) => f,
-        Err(_) => return error(StatusCode::BAD_REQUEST, "Invalid form data", id),
+    let (encoded_body, fields) = if bytes.is_empty() {
+        (String::new(), None)
+    } else {
+        let fields = match form(bytes.clone(), content_type, app.limits.body).await {
+            Ok(f) => f,
+            Err(_) => return error(StatusCode::BAD_REQUEST, "Invalid form data", id),
+        };
+        (STANDARD.encode(bytes), fields)
     };
-    let input=json!({"method":method,"url":url,"headers":headers,"query":query,"search":search,"params":params,"body":STANDARD.encode(bytes),"form":fields,"requestId":id.to_string()}).to_string();
+    let id_str = id.to_string();
+    let input = match serde_json::to_string(&RequestPayload {
+        method: &method,
+        url: &url,
+        headers: &headers,
+        query: &query,
+        search,
+        params: &params,
+        body: &encoded_body,
+        form: &fields,
+        request_id: &id_str,
+    }) {
+        Ok(s) => s,
+        Err(_) => {
+            return error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to serialize request",
+                id,
+            );
+        }
+    };
     let (response_tx, response_rx) = oneshot::channel();
     if app
         .jobs
@@ -326,60 +378,97 @@ async fn shutdown() {
         let _ = tokio::signal::ctrl_c().await;
     }
 }
-pub async fn serve(capsule: Arc<Capsule>, limits: Limits, address: SocketAddr) -> Result<()> {
-    let (jobs, receiver) = mpsc::sync_channel::<Job>(8);
-    let (ready, initialized) = mpsc::channel();
+pub async fn serve(
+    capsule: Arc<Capsule>,
+    limits: Limits,
+    address: SocketAddr,
+    workers: usize,
+) -> Result<()> {
+    let workers = workers.max(1);
+    let queue_size = (workers * 32).max(64);
+    let (jobs, receiver) = mpsc::sync_channel::<Job>(queue_size);
+    let receiver = Arc::new(std::sync::Mutex::new(receiver));
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let (done_tx, done_rx) = mpsc::channel::<()>();
     let stopping = Arc::new(AtomicBool::new(false));
-    let stop_worker = stopping.clone();
-    let worker_limits = limits.clone();
-    let worker_capsule = capsule.clone();
-    let (done_tx, done_rx) = oneshot::channel();
-    std::thread::Builder::new()
-        .name("nio-js-engine".into())
-        .spawn(move || {
-            let mut engine = match Engine::new(worker_capsule.clone(), worker_limits.clone()) {
-                Ok(e) => e,
-                Err(e) => {
-                    let _ = ready.send(Err(e.to_string()));
+
+    for worker_id in 0..workers {
+        let stop_worker = stopping.clone();
+        let worker_limits = limits.clone();
+        let worker_capsule = capsule.clone();
+        let worker_receiver = receiver.clone();
+        let ready = ready_tx.clone();
+        let done = done_tx.clone();
+        std::thread::Builder::new()
+            .name(format!("nio-js-engine-{worker_id}"))
+            .spawn(move || {
+                let _done = done;
+                let mut engine = match Engine::new(worker_capsule.clone(), worker_limits.clone()) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        let _ = ready.send(Err(e.to_string()));
+                        return;
+                    }
+                };
+                if ready.send(Ok(engine.routes.clone())).is_err() {
                     return;
                 }
-            };
-            if ready.send(Ok(engine.routes.clone())).is_err() {
-                return;
-            }
-            while let Ok(job) = receiver.recv() {
-                if job.response.is_closed() || stop_worker.load(Ordering::Relaxed) {
-                    continue;
-                }
-                let result = engine
-                    .dispatch(job.route, job.input)
-                    .map_err(|e| e.to_string());
-                let failed = result.is_err();
-                if let Err(e) = &result {
-                    eprintln!("request {}: {e}", job.id);
-                }
-                let _ = job.response.send(result);
-                if failed {
-                    // Drop outstanding jobs and bindings from a failed invocation before accepting another.
-                    match Engine::new(worker_capsule.clone(), worker_limits.clone()) {
-                        Ok(e) => engine = e,
-                        Err(e) => {
-                            eprintln!("runtime recycle failed: {e}");
-                            break;
+                loop {
+                    let job = {
+                        let rx = match worker_receiver.lock() {
+                            Ok(guard) => guard,
+                            Err(poisoned) => poisoned.into_inner(),
+                        };
+                        match rx.recv() {
+                            Ok(job) => job,
+                            Err(_) => break,
+                        }
+                    };
+                    if job.response.is_closed() || stop_worker.load(Ordering::Relaxed) {
+                        continue;
+                    }
+                    let result = engine
+                        .dispatch(job.route, job.input)
+                        .map_err(|e| e.to_string());
+                    let failed = result.is_err();
+                    if let Err(e) = &result {
+                        eprintln!("request {}: {e}", job.id);
+                    }
+                    let _ = job.response.send(result);
+                    if failed {
+                        // Drop outstanding jobs and bindings from a failed invocation before accepting another.
+                        match Engine::new(worker_capsule.clone(), worker_limits.clone()) {
+                            Ok(e) => engine = e,
+                            Err(e) => {
+                                eprintln!("runtime recycle failed: {e}");
+                                break;
+                            }
                         }
                     }
                 }
-            }
-            let _ = done_tx.send(());
-        })?;
-    let routes = initialized
-        .recv()
-        .map_err(|_| anyhow!("engine startup failed"))?
-        .map_err(|e| anyhow!(e))?;
+            })?;
+    }
+    drop(ready_tx);
+
+    let mut initial_routes = None;
+    for _ in 0..workers {
+        let routes = ready_rx
+            .recv()
+            .map_err(|_| anyhow!("engine startup failed"))?
+            .map_err(|e| anyhow!(e))?;
+        if initial_routes.is_none() {
+            initial_routes = Some(routes);
+        }
+    }
+    let routes = initial_routes.unwrap_or_default();
     if routes.is_empty() {
         stopping.store(true, Ordering::Relaxed);
         drop(jobs);
-        let _ = done_rx.await;
+        drop(done_tx);
+        let _ = tokio::task::spawn_blocking(move || {
+            let _ = done_rx.recv();
+        })
+        .await;
         return Ok(());
     }
     let mut exact: HashMap<String, HashMap<String, usize>> = HashMap::new();
@@ -403,7 +492,7 @@ pub async fn serve(capsule: Arc<Capsule>, limits: Limits, address: SocketAddr) -
         limits: limits.clone(),
         ids: Arc::new(AtomicU64::new(1)),
         stopping: stopping.clone(),
-        requests: Arc::new(tokio::sync::Semaphore::new(8)),
+        requests: Arc::new(tokio::sync::Semaphore::new(queue_size)),
     };
     let router = Router::new().fallback(handle).with_state(app);
     let listener = tokio::net::TcpListener::bind(address).await?;
@@ -424,7 +513,14 @@ pub async fn serve(capsule: Arc<Capsule>, limits: Limits, address: SocketAddr) -
             if tokio::time::timeout(limits.timeout+std::time::Duration::from_secs(5),&mut server).await.is_err() { eprintln!("shutdown drain deadline reached"); }
         }
     }
-    let _ = tokio::time::timeout(limits.timeout + std::time::Duration::from_secs(1), done_rx).await;
+    drop(done_tx);
+    let _ = tokio::time::timeout(
+        limits.timeout + std::time::Duration::from_secs(1),
+        tokio::task::spawn_blocking(move || {
+            let _ = done_rx.recv();
+        }),
+    )
+    .await;
     Ok(())
 }
 #[cfg(test)]

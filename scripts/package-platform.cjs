@@ -8,6 +8,7 @@ function packagePlatform(binary, platform, arch, output = join(root, 'dist')) {
   if (!targets.some(([os, cpu]) => os === platform && cpu === arch)) throw new Error(`Unsupported platform ${platform}/${arch}`);
   const { version } = checkVersion();
   binary = resolve(binary);
+  output = resolve(output);
   if (!statSync(binary).isFile() || statSync(binary).size === 0) throw new Error('Expected a nonempty compiled nio-js executable.');
   const filename = platform === 'win32' ? 'nio-js.exe' : 'nio-js';
   const asset = `nio-js-${platform}-${arch}${platform === 'win32' ? '.exe' : ''}`;
@@ -35,7 +36,7 @@ function packagePlatform(binary, platform, arch, output = join(root, 'dist')) {
 module.exports = { packagePlatform };
 if (require.main === module) {
   try {
-    const [binary = join(root, 'target', 'release', process.platform === 'win32' ? 'nio-js.exe' : 'nio-js'), platform = process.platform, arch = process.arch] = process.argv.slice(2);
-    console.log(packagePlatform(binary, platform, arch));
+    const [binary = join(root, 'target', 'release', process.platform === 'win32' ? 'nio-js.exe' : 'nio-js'), platform = process.platform, arch = process.arch, output = join(root, 'dist')] = process.argv.slice(2);
+    console.log(packagePlatform(binary, platform, arch, output));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

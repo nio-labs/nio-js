@@ -145,10 +145,22 @@
       if (result.bodyUsed) throw new TypeError('Response body already consumed');
       options = { status: result.status, headers: Object.fromEntries(result.headers) }; result = result._blob;
     }
-    if (typeof result === 'string') { body = result; type = 'text/plain; charset=utf-8'; }
-    else if (result instanceof Blob) { body = result._bytes; type = result.type || 'application/octet-stream'; }
-    else if (result !== null && typeof result === 'object' && (Array.isArray(result) || Object.getPrototypeOf(result) === Object.prototype || Object.getPrototypeOf(result) === null)) {
-      body = JSON.stringify(result); type = 'application/json; charset=utf-8';
+    if (typeof result === 'string') {
+      body = result;
+      if (options.headers === undefined && (options.status === undefined || options.status === 200)) {
+        if (body.length > __nioMaxBody) throw new RangeError('Response exceeds byte limit');
+        return { status: 200, fastType: 1, body };
+      }
+      type = 'text/plain; charset=utf-8';
+    } else if (result instanceof Blob) {
+      body = result._bytes; type = result.type || 'application/octet-stream';
+    } else if (result !== null && typeof result === 'object' && (Array.isArray(result) || Object.getPrototypeOf(result) === Object.prototype || Object.getPrototypeOf(result) === null)) {
+      body = JSON.stringify(result);
+      if (options.headers === undefined && (options.status === undefined || options.status === 200)) {
+        if (body.length > __nioMaxBody) throw new RangeError('Response exceeds byte limit');
+        return { status: 200, fastType: 2, body };
+      }
+      type = 'application/json; charset=utf-8';
     } else throw new TypeError('Unsupported handler return value');
     if (body.length > __nioMaxBody) throw new RangeError('Response exceeds byte limit');
     let headers;
@@ -160,33 +172,75 @@
     }
     const status = options.status ?? 200;
     if (!Number.isInteger(status) || status < 200 || status > 599) throw new TypeError('Invalid response status');
-    return { status, headers, body };
+    return { status, headers, body, fastType: 0 };
   };
   globalThis.__nioRoutes = () => {
     closed = true;
     return routes.map(r => ({ method:r.method, path:r.path, constant:typeof r.handler !== 'function' ? encodeReply(r.handler) : null }));
   };
-  globalThis.__nioDispatch = (route, input) => {
-    const req = JSON.parse(input); let used = false;
-    const consume = () => { if (used) throw new TypeError('Body already consumed'); used = true; return new Uint8Array(__nioUnbase64(req.body)); };
-    const rawHeaders = req.headers, rawSearch = req.search;
-    let headers, searchParams, headersReady = false, searchReady = false;
-    Object.defineProperties(req, {
-      headers: { enumerable:true, configurable:true, get() { if (!headersReady) { headers = new Headers(rawHeaders); headersReady = true; } return headers; }, set(value) { headers = value; headersReady = true; } },
-      searchParams: { enumerable:true, configurable:true, get() { if (!searchReady) { searchParams = new URLSearchParams(rawSearch); searchReady = true; } return searchParams; }, set(value) { searchParams = value; searchReady = true; } },
-    });
-    req.text = async () => __nioDecode(Array.from(consume()));
-    req.json = async () => JSON.parse(await req.text());
-    req.blob = async () => new Blob([consume()], { type:req.headers.get('content-type') ?? '' });
-    req.formData = async () => {
-      consume(); if (!req.form) throw new TypeError('Expected multipart/form-data or application/x-www-form-urlencoded');
-      const form = new FormData();
-      for (const field of req.form) {
-        if (field.filename !== null) form.append(field.name, new File([new Uint8Array(__nioUnbase64(field.body))],field.filename,{ type:field.type ?? '' }));
-        else form.append(field.name, __nioDecode(__nioUnbase64(field.body)));
+  class NioRequest {
+    constructor(parsed) {
+      this.method = parsed.method;
+      this.url = parsed.url;
+      this.search = parsed.search || '';
+      this.params = parsed.params || {};
+      this.requestId = parsed.requestId;
+      this._raw = parsed;
+      this._headers = null;
+      this._searchParams = null;
+      this._boundText = null;
+      this._boundJson = null;
+      this._boundBlob = null;
+      this._boundFormData = null;
+    }
+    get headers() {
+      if (!this._headers) this._headers = new Headers(this._raw.headers || []);
+      return this._headers;
+    }
+    set headers(v) { this._headers = v; }
+    get searchParams() {
+      if (!this._searchParams) this._searchParams = new URLSearchParams(this.search);
+      return this._searchParams;
+    }
+    set searchParams(v) { this._searchParams = v; }
+    get query() {
+      if (!this._query) {
+        this._query = {};
+        for (const [k, v] of this.searchParams) {
+          if (!(k in this._query)) this._query[k] = v;
+        }
       }
-      return form;
-    };
+      return this._query;
+    }
+    _getBytes() {
+      if (this._consumed) throw new TypeError('Body already consumed');
+      this._consumed = true;
+      return this._raw.body ? new Uint8Array(__nioUnbase64(this._raw.body)) : new Uint8Array(0);
+    }
+    get text() {
+      return this._boundText || (this._boundText = async () => __nioDecode(Array.from(this._getBytes())));
+    }
+    get json() {
+      return this._boundJson || (this._boundJson = async () => JSON.parse(await this.text()));
+    }
+    get blob() {
+      return this._boundBlob || (this._boundBlob = async () => new Blob([this._getBytes()], { type: this.headers.get('content-type') ?? '' }));
+    }
+    get formData() {
+      return this._boundFormData || (this._boundFormData = async () => {
+        this._getBytes();
+        if (!this._raw.form) throw new TypeError('Expected multipart/form-data or application/x-www-form-urlencoded');
+        const form = new FormData();
+        for (const field of this._raw.form) {
+          if (field.filename !== null) form.append(field.name, new File([new Uint8Array(__nioUnbase64(field.body))], field.filename, { type: field.type ?? '' }));
+          else form.append(field.name, __nioDecode(__nioUnbase64(field.body)));
+        }
+        return form;
+      });
+    }
+  }
+  globalThis.__nioDispatch = (route, input) => {
+    const req = new NioRequest(JSON.parse(input));
     const handler = routes[route]?.handler;
     if (typeof handler !== 'function') throw new Error('Invalid callback route');
     const result = handler(req);

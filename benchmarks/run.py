@@ -19,6 +19,8 @@ BENCH = ROOT / 'benchmarks'
 NIO = ROOT / 'target/release/nio-js'
 BEFORE = BENCH / '.tools/nio-before'
 BUN = BENCH / '.tools/bun-darwin-aarch64/bun'
+DENO_BIN = Path.home() / '.deno/bin/deno'
+DENO = str(DENO_BIN) if DENO_BIN.exists() else 'deno'
 LOAD = BENCH / 'loadgen/target/release/nio-bench-loadgen'
 CAPSULE = BENCH / 'app.njs'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -39,11 +41,14 @@ def start(runtime):
     if runtime.startswith('nio'):
         entry = BENCH / 'nio.js' if runtime == 'nio-source' else CAPSULE
         args = [str(BEFORE if runtime == 'nio-before' else NIO), 'run', str(entry), '--host', '127.0.0.1', '--port', str(port)]
+    elif runtime == 'deno':
+        args = [DENO, 'run', '--quiet', '--allow-net', '--allow-env', str(BENCH / 'deno.mjs')]
     else:
         args = [str(BUN) if runtime == 'bun' else 'node', str(BENCH / f'{runtime}.mjs')]
     log = tempfile.TemporaryFile()
     before = time.perf_counter()
-    proc = subprocess.Popen(args, cwd=ROOT, env={**os.environ, 'PORT': str(port)}, stdout=log, stderr=log)
+    env = {**os.environ, 'PORT': str(port), 'DENO_NO_UPDATE_CHECK': '1'}
+    proc = subprocess.Popen(args, cwd=ROOT, env=env, stdout=log, stderr=log)
     url = f'http://127.0.0.1:{port}'
     while time.perf_counter() - before < 10:
         try:
@@ -104,16 +109,21 @@ def measure_startup(data, runtimes):
 
 def main(include_baseline=True):
     subprocess.run([str(NIO), 'build', str(BENCH / 'nio.js'), '-o', str(CAPSULE)], cwd=ROOT, check=True)
+    versions = {'nio': command(str(NIO), '--version'), 'node': command('node', '--version'), 'bun': command(str(BUN), '--version')}
+    try:
+        versions['deno'] = command(DENO, '--version').splitlines()[0]
+    except Exception:
+        pass
     data = {'date_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'machine': {
         'os': command('sw_vers', '-productVersion'), 'architecture': platform.machine(),
         'cpu': command('sysctl', '-n', 'machdep.cpu.brand_string'),
         'logical_cpus': int(command('sysctl', '-n', 'hw.ncpu')),
         'ram_gib': int(command('sysctl', '-n', 'hw.memsize')) / 1024**3,
-    }, 'versions': {'nio': command(str(NIO), '--version'), 'node': command('node', '--version'), 'bun': command(str(BUN), '--version')},
+    }, 'versions': versions,
     'binary_sha256': {'nio': hashlib.sha256(NIO.read_bytes()).hexdigest(), 'bun': hashlib.sha256(BUN.read_bytes()).hexdigest()},
     'startup': {}, 'http': [], 'config': {'rounds': 3, 'warmup_seconds': 1, 'measurement_seconds': 2, 'concurrency': [1, 8], 'cpu_iterations': 100000}}
     has_baseline = include_baseline and BEFORE.exists()
-    runtimes = ['nio', 'node', 'bun'] + (['nio-before'] if has_baseline else [])
+    runtimes = ['nio', 'node', 'bun', 'deno'] + (['nio-before'] if has_baseline else [])
     data['config']['runtime_order'] = 'rotating order, one position per round'
     if has_baseline:
         data['binary_sha256']['nio-before'] = hashlib.sha256(BEFORE.read_bytes()).hexdigest()
@@ -155,11 +165,16 @@ def report(data):
         '## Startup and idle memory', '', '| Runtime | Median startup to first HTTP response (ms) | Idle RSS (MiB) |', '|---|---:|---:|']
     for name, item in data['startup'].items():
         lines.append(f'| {name} | {item["median_ms"]:.2f} | {item["idle_rss_mib"]:.2f} |')
-    lines += ['', '## HTTP throughput and latency', '', 'Each cell is the median of three rounds. Latency includes client, loopback networking, queueing, and response validation.', '',
-        '| Route | Concurrency | nio-js req/s | Node req/s | Bun req/s | nio-js p95 ms | Node p95 ms | Bun p95 ms |', '|---|---:|---:|---:|---:|---:|---:|---:|']
+    lines += ['', '## HTTP throughput and latency', '', 'Each cell is the median of three rounds. Latency includes client, loopback networking, queueing, and response validation.', '']
+    comp = [r for r in ['nio', 'node', 'bun', 'deno'] if any(x['runtime'] == r for x in data['http'])]
+    name_map = {'nio': 'nio-js', 'node': 'Node', 'bun': 'Bun', 'deno': 'Deno'}
+    header_rps = ' | '.join(f'{name_map[r]} req/s' for r in comp)
+    header_p95 = ' | '.join(f'{name_map[r]} p95 ms' for r in comp)
+    lines.append(f'| Route | Concurrency | {header_rps} | {header_p95} |')
+    lines.append('|---|---:' + ''.join('|---:' for _ in range(len(comp) * 2)) + '|')
     for route in ['constant', 'callback', 'json', 'cpu']:
         for concurrency in [1, 8]:
-            groups = [[x for x in data['http'] if x['runtime'] == runtime and x['route'] == route and x['concurrency'] == concurrency] for runtime in ['nio', 'node', 'bun']]
+            groups = [[x for x in data['http'] if x['runtime'] == runtime and x['route'] == route and x['concurrency'] == concurrency] for runtime in comp]
             values = [f'{statistics.median(x["rps"] for x in group):,.0f}' for group in groups]
             values += [f'{statistics.median(x["p95_ms"] for x in group):.3f}' for group in groups]
             lines.append(f'| /{route} | {concurrency} | ' + ' | '.join(values) + ' |')
@@ -173,11 +188,12 @@ def report(data):
         lines += ['', f'Paired startup measurements: before {old_start:.2f} ms, after {new_start:.2f} ms. The HTTP changes do not improve every metric. The small CPU throughput difference should not be treated as an engine speedup: no JavaScript engine/compiler optimization was made, and observed performance varies across rounds.', '']
     lines += ['', '## Variation and interpretation', '',
         'Throughput varied substantially across rounds. For the fixed-response route at concurrency 8, the observed ranges were:', '']
-    for runtime in ['nio', 'node', 'bun']:
+    for runtime in comp:
         samples = [x['rps'] for x in data['http'] if x['runtime'] == runtime and x['route'] == 'constant' and x['concurrency'] == 8]
-        lines.append(f'* {runtime}: {min(samples):,.0f}–{max(samples):,.0f} requests/s.')
+        if samples:
+            lines.append(f'* {runtime}: {min(samples):,.0f}–{max(samples):,.0f} requests/s.')
     lines += ['', 'Small differences in median fixed-response rates do not establish a throughput winner when the observed ranges overlap. Startup and memory, callbacks, JSON, and CPU must be judged separately. The native constant-response path avoids JavaScript execution per request.', '',
-        'The optimized runtime passes response strings and typed-array bytes directly to Rust, has a synchronous dispatch path, defers request header/search-parameter construction until used, indexes exact routes, caches constant response headers/bodies, and uses two HTTP I/O threads. QuickJS still executes CPU work on one JavaScript thread. If included, the same-run baseline uses the saved binary from before these optimizations; the capsule format and workloads are unchanged.', '',
+        'The optimized runtime passes response strings and typed-array bytes directly to Rust, has a synchronous dispatch path, defers request header/search-parameter construction until used, indexes exact routes, caches constant response headers/bodies, and uses a multi-worker thread pool for concurrent JS dispatch. QuickJS still executes CPU work on one JavaScript thread per worker. If included, the same-run baseline uses the saved binary from before these optimizations; the capsule format and workloads are unchanged.', '',
         f'Total measured errors: {sum(x["errors"] for x in data["http"])}. Every successful response matched the reference bytes.', '',
         'Method and limitations: see [README.md](README.md). Per-round latency percentiles, throughput, and sampled loaded RSS: [results.json](results.json).', '']
     (BENCH / 'RESULTS.md').write_text('\n'.join(lines))
