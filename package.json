@@ -1,0 +1,29 @@
+{
+  "name": "@nio-labs/nio-js",
+  "version": "0.1.0",
+  "description": "A compact JavaScript and TypeScript service runtime with portable .njs capsules",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "nio-js": "bin/nio-js.cjs" },
+  "types": "types/nio.d.ts",
+  "files": ["bin/", "types/", "docs/", "README.md", "NIOJS.md", "LICENSE"],
+  "repository": { "type": "git", "url": "git+https://github.com/nio-labs/nio-js.git" },
+  "homepage": "https://github.com/nio-labs/nio-js#readme",
+  "bugs": "https://github.com/nio-labs/nio-js/issues",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "build": "cargo build --release --locked",
+    "test": "node --test scripts/release.test.cjs",
+    "check:version": "node scripts/check-version.cjs",
+    "package:platform": "node scripts/package-platform.cjs"
+  },
+  "optionalDependencies": {
+    "@nio-labs/nio-js-android-arm64": "0.1.0",
+    "@nio-labs/nio-js-darwin-arm64": "0.1.0",
+    "@nio-labs/nio-js-darwin-x64": "0.1.0",
+    "@nio-labs/nio-js-linux-arm64": "0.1.0",
+    "@nio-labs/nio-js-linux-x64": "0.1.0",
+    "@nio-labs/nio-js-win32-x64": "0.1.0"
+  },
+  "publishConfig": { "access": "public" }
+}

@@ -1,0 +1,184 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag (for example v0.1.0)
+        required: true
+        type: string
+      publish:
+        description: Publish to npm and GitHub (otherwise build and test only)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      npm_tag: ${{ steps.version.outputs.npm_tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Check tag and package versions
+        id: version
+        run: node scripts/check-version.cjs "$RELEASE_TAG"
+      - run: npm test
+
+  build:
+    needs: validate
+    name: build ${{ matrix.platform }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            binary: nio-js
+            rust_target: x86_64-unknown-linux-gnu
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+            binary: nio-js
+            rust_target: aarch64-unknown-linux-gnu
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+            binary: nio-js
+            rust_target: aarch64-apple-darwin
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+            binary: nio-js
+            rust_target: x86_64-apple-darwin
+          - os: windows-2022
+            platform: win32
+            arch: x64
+            binary: nio-js.exe
+            rust_target: x86_64-pc-windows-msvc
+          - os: ubuntu-22.04
+            platform: android
+            arch: arm64
+            binary: nio-js
+            rust_target: aarch64-linux-android
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: ${{ matrix.rust_target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+      - run: npm test
+      - name: Set up Android ARM64 compiler (API 24)
+        if: matrix.platform == 'android'
+        run: bash scripts/setup-android.sh
+      - run: cargo build --release --locked --target "${{ matrix.rust_target }}"
+      - name: Smoke-test the launcher with the native release executable
+        if: matrix.platform != 'android'
+        env:
+          NIO_JS_BIN: target/${{ matrix.rust_target }}/release/${{ matrix.binary }}
+        run: node bin/nio-js.cjs --version
+      - name: Package platform binary and npm tarball
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+          BINARY: ${{ matrix.binary }}
+          RUST_TARGET: ${{ matrix.rust_target }}
+        run: |
+          node scripts/package-platform.cjs "target/$RUST_TARGET/release/$BINARY" "$PLATFORM" "$ARCH"
+          mkdir -p dist/npm
+          npm pack "./dist/nio-js-$PLATFORM-$ARCH" --ignore-scripts --pack-destination dist/npm --json > "dist/npm/pack-$PLATFORM-$ARCH.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            dist/release/*
+            dist/npm/*
+          if-no-files-found: error
+
+  android:
+    needs: validate
+    uses: ./.github/workflows/android.yml
+    with:
+      ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+  publish:
+    needs: [validate, build, android]
+    if: github.event_name == 'push' || inputs.publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Set up npm publishing
+        run: |
+          npm install --global npm@11
+          if [ -n "$NODE_AUTH_TOKEN" ]; then
+            npm config set '//registry.npmjs.org/:_authToken' '${NODE_AUTH_TOKEN}'
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist/artifacts
+      - name: Pack the launcher
+        run: npm pack . --ignore-scripts --pack-destination dist/artifacts/npm --json > dist/artifacts/npm/pack-launcher.json
+      - name: Verify every artifact and prepare the publish plan
+        run: node scripts/prepare-release.cjs
+      - name: Publish platform packages, then the launcher
+        run: node scripts/publish-npm.cjs
+      - name: Create or update the GitHub release
+        run: |
+          if ! gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --draft --verify-tag --generate-notes --title "$RELEASE_TAG"
+          fi
+          gh release upload "$RELEASE_TAG" dist/artifacts/release/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease="$PRERELEASE"

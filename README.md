@@ -11,6 +11,19 @@ The engine is embedded through `rquickjs` 0.14, which currently bundles the Quic
 
 ## Run
 
+After a release is published, install the native CLI through npm:
+
+```sh
+npx @nio-labs/nio-js run app.ts
+# Or install it once:
+npm install -g @nio-labs/nio-js
+nio-js run app.ts
+```
+
+The npm launcher requires Node 18+ and installs the matching native binary as an optional dependency. Standalone binaries from [GitHub Releases](https://github.com/nio-labs/nio-js/releases) run without Node. Release configuration and publishing instructions are in [docs/RELEASING.md](docs/RELEASING.md).
+
+Android ARM64 binaries are included for a Termux preview. Installation instructions and the device-validation scope are in [docs/TERMUX.md](docs/TERMUX.md).
+
 From this directory:
 
 ```bash

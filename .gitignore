@@ -5,3 +5,6 @@
 /benchmarks/loadgen/target/
 /benchmarks/__pycache__/
 .DS_Store
+/dist/
+/node_modules/
+*.tgz
