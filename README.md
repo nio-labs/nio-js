@@ -27,11 +27,11 @@ curl -fsSL https://raw.githubusercontent.com/nio-labs/nio-js/main/install.sh -o 
 sh install.sh --version v0.1.0 --install-dir "$HOME/.local/bin"
 ```
 
-Linux releases require GNU libc (built on Ubuntu 22.04); musl distributions are not supported. Windows and npm users can use `npm install -g @nio-labs/nio-js` or `npx @nio-labs/nio-js run app.ts`. The npm launcher requires Node 18+. Standalone binaries are also available from [GitHub Releases](https://github.com/nio-labs/nio-js/releases). Release configuration is in [docs/RELEASING.md](docs/RELEASING.md). Installation downloads become available once the first release is published.
+Linux releases require GNU libc (built on Ubuntu 22.04); musl distributions are not supported. Windows and npm users can use `npm install -g @nio-labs/nio-js` or `npx @nio-labs/nio-js run app.ts`. The npm launcher requires Node 18+. Standalone binaries are also available from [GitHub Releases](https://github.com/nio-labs/nio-js/releases). Installation downloads become available once the first release is published.
 
-Maintainers: pushing a `v*` version tag publishes to npm and GitHub after validation. To publish an existing tag manually, use [Actions → Publish to npm](https://github.com/nio-labs/nio-js/actions/workflows/publish.yml). Configure npm publishing credentials first as described in the release guide.
+Maintainers: pushing a `v*` version tag publishes to npm and GitHub after validation. To publish an existing tag manually, use [Actions → Publish to npm](https://github.com/nio-labs/nio-js/actions/workflows/publish.yml). Configure the repository secret `NPM_TOKEN` first, or configure npm trusted publishers for both `release.yml` and `publish.yml` on all seven packages.
 
-Android ARM64 binaries are included for a Termux preview. Installation instructions and the device-validation scope are in [docs/TERMUX.md](docs/TERMUX.md).
+Android ARM64 binaries are included for a Termux preview. Run `pkg install curl coreutils`, then use the installer above; it installs into `$PREFIX/bin`. Real ARM64 device validation is still required.
 
 To build from source, run from this directory and install the compiled executable:
 
@@ -66,7 +66,7 @@ nio-js verify app.njs
 nio-js run app.njs --host 127.0.0.1 --port 3000
 ```
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for locked dependency builds, Linux systemd setup, HTTPS, health checks, updates, and rollbacks.
+Pin the runtime version and dependency URLs, commit `nio.lock`, and use `--frozen` for subsequent builds (`--offline --frozen` when dependencies are cached). Deploy the verified capsule to your server and run it under a process supervisor such as systemd. Keep the service bound to loopback behind an HTTPS reverse proxy, check an application health route after deployments, and retain the previous capsule and runtime version for rollback. Capsule execution requires neither source files nor the dependency cache.
 
 ## Capsules
 
