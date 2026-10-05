@@ -42,7 +42,7 @@ case "$os" in
         *musl*) fail 'musl Linux is not supported by the current releases' ;;
       esac
     fi ;;
-  *) fail "Unsupported operating system: $os. Windows users can use npm or GitHub Releases." ;;
+  *) fail "Unsupported operating system: $os. Windows users can use install.ps1 or npm." ;;
 esac
 case "$(uname -m)" in
   x86_64|amd64) arch=x64 ;;

@@ -1,6 +1,6 @@
 # nio-js
 
-A working preview of a Rust-hosted QuickJS service runtime. Write JavaScript or TypeScript, import compatible ESM by URL, and package code and assets into a portable `.njs` capsule.
+A compact JavaScript and TypeScript service runtime with portable `.njs` capsules. Write JavaScript or TypeScript, import compatible ESM by URL, and package code and assets into an immutable, self-contained capsule.
 
 ```typescript
 import { get } from 'nio.js'
@@ -11,23 +11,51 @@ The engine is embedded through `rquickjs` 0.14, which currently bundles the Quic
 
 ## Run
 
-After a release is published, install the standalone CLI (macOS, Linux, or Termux):
+After a release is published, install the standalone CLI:
+
+### macOS, Linux, and Android (Termux)
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/nio-labs/nio-js/main/install.sh | sh
 nio-js run app.ts
 ```
 
-The installer detects your platform, downloads the latest stable release, verifies its SHA-256 checksum, and installs to `$HOME/.local/bin` (or `$PREFIX/bin` in Termux). It requires curl or wget and sha256sum or shasum. Add the printed directory to PATH if needed. Node and root access are unnecessary.
-
-For a specific version or directory, download the script and pass options:
+For a specific version or install directory:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/nio-labs/nio-js/main/install.sh -o install.sh
 sh install.sh --version v0.1.0 --install-dir "$HOME/.local/bin"
 ```
 
-Linux releases require GNU libc (built on Ubuntu 22.04); musl distributions are not supported. Windows and npm users can use `npm install -g @nio-labs/nio-js` or `npx @nio-labs/nio-js run app.ts`. The npm launcher requires Node 18+. Standalone binaries are also available from [GitHub Releases](https://github.com/nio-labs/nio-js/releases). Installation downloads become available once the first release is published.
+The installer detects your platform, downloads the latest stable release, verifies its SHA-256 checksum, and installs to `$HOME/.local/bin` (or `$PREFIX/bin` in Termux). It requires curl or wget and sha256sum or shasum. Linux releases require GNU libc (built on Ubuntu 22.04); musl distributions are not supported.
+
+### Windows (x64)
+
+Install standalone using PowerShell:
+
+```powershell
+powershell -c "irm https://raw.githubusercontent.com/nio-labs/nio-js/main/install.ps1 | iex"
+nio-js run app.ts
+```
+
+For a specific version or directory:
+
+```powershell
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/nio-labs/nio-js/main/install.ps1 -OutFile install.ps1
+.\install.ps1 -Version v0.1.0 -InstallDir "$env:USERPROFILE\.local\bin"
+```
+
+### npm
+
+Alternatively, npm users on any supported platform can use:
+
+```sh
+npm install -g @nio-labs/nio-js
+# or run directly:
+npx @nio-labs/nio-js run app.ts
+```
+
+The npm launcher requires Node 18+. Standalone binaries and checksums are also available directly from [GitHub Releases](https://github.com/nio-labs/nio-js/releases). Installation downloads become available once the first release is published.
 
 Android ARM64 binaries are included for a Termux preview. Run `pkg install curl coreutils`, then use the installer above; it installs into `$PREFIX/bin`. Real ARM64 device validation is still required.
 

@@ -76,3 +76,30 @@ test('installer rejects unsupported architectures, musl and malformed versions b
   assert.notEqual(f.run(['--version', '../anything']).status, 0);
   assert.ok(!fs.existsSync(join(f.dir, 'requests')));
 });
+
+const psInstaller = resolve(__dirname, '../install.ps1');
+test('Windows PowerShell installer script exists and contains expected verification logic', () => {
+  assert.ok(fs.existsSync(psInstaller), 'install.ps1 must exist');
+  const content = fs.readFileSync(psInstaller, 'utf8');
+  assert.match(content, /nio-js-win32-x64\.exe/, 'must reference the win32-x64 binary asset');
+  assert.match(content, /Get-FileHash.*SHA256/i, 'must verify SHA256 checksum');
+  assert.match(content, /Is64BitOperatingSystem/, 'must verify 64-bit architecture');
+  assert.match(content, /github\.com\/nio-labs\/nio-js\/releases/, 'must download from official releases');
+});
+
+const pwshBin = (() => {
+  for (const cmd of [process.platform === 'win32' ? 'powershell' : 'pwsh', 'powershell', 'pwsh']) {
+    try {
+      const res = spawnSync(cmd, ['-NoProfile', '-Command', 'Write-Output ok'], { encoding: 'utf8' });
+      if (res.status === 0 && res.stdout.includes('ok')) return cmd;
+    } catch {}
+  }
+  return null;
+})();
+
+test('Windows PowerShell installer runs -Help cleanly', { skip: !pwshBin }, () => {
+  const result = spawnSync(pwshBin, ['-NoProfile', '-File', psInstaller, '-Help'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Usage: install\.ps1/);
+});
+

@@ -1,13 +1,14 @@
 name: Publish to npm
-run-name: Publish ${{ inputs.tag }} to npm and GitHub
+run-name: Publish ${{ inputs.tag || 'release' }} to npm and GitHub
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag (for example v0.1.0)
-        required: true
+        description: Version tag to publish (leave empty to use package.json version)
+        required: false
         type: string
+        default: ''
 
 permissions:
   contents: write
