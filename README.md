@@ -29,6 +29,8 @@ sh install.sh --version v0.1.0 --install-dir "$HOME/.local/bin"
 
 Linux releases require GNU libc (built on Ubuntu 22.04); musl distributions are not supported. Windows and npm users can use `npm install -g @nio-labs/nio-js` or `npx @nio-labs/nio-js run app.ts`. The npm launcher requires Node 18+. Standalone binaries are also available from [GitHub Releases](https://github.com/nio-labs/nio-js/releases). Release configuration is in [docs/RELEASING.md](docs/RELEASING.md). Installation downloads become available once the first release is published.
 
+Maintainers: pushing a `v*` version tag publishes to npm and GitHub after validation. To publish an existing tag manually, use [Actions → Publish to npm](https://github.com/nio-labs/nio-js/actions/workflows/publish.yml). Configure npm publishing credentials first as described in the release guide.
+
 Android ARM64 binaries are included for a Termux preview. Installation instructions and the device-validation scope are in [docs/TERMUX.md](docs/TERMUX.md).
 
 To build from source, run from this directory and install the compiled executable:

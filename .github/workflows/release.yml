@@ -3,6 +3,19 @@ name: release
 on:
   push:
     tags: ['v*']
+  workflow_call:
+    inputs:
+      tag:
+        description: Existing version tag to build and publish
+        required: true
+        type: string
+      publish:
+        description: Publish validated packages to npm and GitHub
+        type: boolean
+        default: false
+    secrets:
+      NPM_TOKEN:
+        required: false
   workflow_dispatch:
     inputs:
       tag:
