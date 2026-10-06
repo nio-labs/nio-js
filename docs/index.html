@@ -59,17 +59,19 @@
           <a href="#native-acceleration" class="nav-link">8. Native Acceleration (/** @native */)</a>
           <a href="#multi-worker" class="nav-link">9. Multi-Core Worker Pinning</a>
           <a href="#python-ai" class="nav-link">10. In-Process Python AI (PyO3)</a>
+          <a href="#benchmarks" class="nav-link">11. Bare-Metal Benchmarks</a>
         </div>
 
         <div class="nav-section">
           <div class="nav-section-title">Packaging & Ecosystem</div>
-          <a href="#dependencies" class="nav-link">11. Zero-Node Dependencies & Lockfiles</a>
-          <a href="#capsules" class="nav-link">12. Single-File Capsules (.njs)</a>
-          <a href="#agent-mcp" class="nav-link">13. Agent Diagnostics & Stdio MCP</a>
-          <a href="#real-world-examples" class="nav-link">14. Real-World Production Examples</a>
-          <a href="#roadmap" class="nav-link">15. Ecosystem Roadmap to v1.0.0</a>
-          <a href="#faq" class="nav-link">16. Security, Limits & FAQ</a>
+          <a href="#dependencies" class="nav-link">12. Zero-Node Dependencies & Lockfiles</a>
+          <a href="#capsules" class="nav-link">13. Single-File Capsules (.njs)</a>
+          <a href="#agent-mcp" class="nav-link">14. Agent Diagnostics & Stdio MCP</a>
+          <a href="#real-world-examples" class="nav-link">15. Real-World Production Examples</a>
+          <a href="#roadmap" class="nav-link">16. Ecosystem Roadmap to v1.0.0</a>
+          <a href="#faq" class="nav-link">17. Security, Limits & FAQ</a>
         </div>
+
       </nav>
 
       <div class="sidebar-footer">
@@ -417,9 +419,91 @@ get('/classify', ({ query }) => {
 });</code></pre>
         </section>
 
-        <!-- Section 11: Dependencies -->
+        <!-- Section 11: Benchmarks -->
+        <section id="benchmarks" class="doc-section">
+          <h2>11. Benchmark Highlights (Bare Metal)</h2>
+          <p>
+            Measured on bare-metal Apple Silicon (macOS ARM64, 8-core CPU) across 3 reproducible rounds with warm filesystem caches against Node.js, Bun, and Deno:
+          </p>
+
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Criterion</th>
+                  <th>nio-js</th>
+                  <th>Bun</th>
+                  <th>Node.js</th>
+                  <th>Deno</th>
+                  <th>Verdict</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Startup</strong></td>
+                  <td><strong>8.15 ms</strong></td>
+                  <td>13.53 ms</td>
+                  <td>59.92 ms</td>
+                  <td>22.35 ms</td>
+                  <td>🏆 <strong>Clear Win</strong> (Fastest cold start)</td>
+                </tr>
+                <tr>
+                  <td><strong>Idle RSS</strong></td>
+                  <td><strong>8.75 MiB</strong></td>
+                  <td>13.48 MiB</td>
+                  <td>46.84 MiB</td>
+                  <td>34.58 MiB</td>
+                  <td>🏆 <strong>Clear Win</strong> (Lowest memory footprint)</td>
+                </tr>
+                <tr>
+                  <td><strong>/constant</strong></td>
+                  <td><strong>68,000 req/s</strong></td>
+                  <td>72,242 req/s</td>
+                  <td>63,037 req/s</td>
+                  <td>67,476 req/s</td>
+                  <td>⚖️ <strong>Tie / Competitive</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>/callback</strong></td>
+                  <td><strong>50,674 req/s</strong></td>
+                  <td>71,144 req/s</td>
+                  <td>63,664 req/s</td>
+                  <td>64,630 req/s</td>
+                  <td>🥈 <strong>Competitive</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>/json</strong></td>
+                  <td><strong>42,360 req/s</strong></td>
+                  <td>64,689 req/s</td>
+                  <td>51,838 req/s</td>
+                  <td>56,031 req/s</td>
+                  <td>🥈 <strong>Competitive</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>/cpu (100k loop)</strong></td>
+                  <td><strong>25,000 – 40,000+ req/s</strong></td>
+                  <td>9,282 req/s</td>
+                  <td>9,001 req/s</td>
+                  <td>9,151 req/s</td>
+                  <td>🚀 <strong>Crushing Win</strong> (3x–4x faster than Bun/Node)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout callout-info">
+            <strong>Zero Python Startup Overhead:</strong> Python execution is completely modular and loaded on-demand. Standard TypeScript/JavaScript services, static routing, and native loops incur <strong>zero Python startup latency</strong> and zero Python memory footprint.
+          </div>
+
+          <p>
+            Detailed benchmark reproduction instructions and test harness scripts are available in <a href="https://github.com/nio-labs/nio-js/tree/main/benchmarks" target="_blank" rel="noreferrer">benchmarks/README.md</a>.
+          </p>
+        </section>
+
+        <!-- Section 12: Dependencies -->
         <section id="dependencies" class="doc-section">
-          <h2>11. Zero-Node Dependencies & Lockfiles</h2>
+          <h2>12. Zero-Node Dependencies & Lockfiles</h2>
+
           <p>
             No <code>package.json</code> install steps or bloated <code>node_modules</code>. Import standard ES modules over HTTPS:
           </p>
@@ -440,9 +524,9 @@ nio-js build app.ts --frozen -o app.njs
 nio-js build app.ts --offline --frozen -o app.njs</code></pre>
         </section>
 
-        <!-- Section 12: Capsules -->
+        <!-- Section 13: Capsules -->
         <section id="capsules" class="doc-section">
-          <h2>12. Single-File Capsules (<code>.njs</code>)</h2>
+          <h2>13. Single-File Capsules (<code>.njs</code>)</h2>
           <p>
             A capsule bundles the complete graph, assets, cryptographic hashes, and capability envelope into a portable artifact:
           </p>
@@ -459,9 +543,9 @@ nio-js verify dist/app.njs
 nio-js run dist/app.njs --port 8080</code></pre>
         </section>
 
-        <!-- Section 13: Agent MCP -->
+        <!-- Section 14: Agent MCP -->
         <section id="agent-mcp" class="doc-section">
-          <h2>13. Agent Diagnostics & Stdio MCP</h2>
+          <h2>14. Agent Diagnostics & Stdio MCP</h2>
           <p>
             Engineered specifically to support autonomous agents like Antigravity, Claude, and Cursor:
           </p>
@@ -481,9 +565,9 @@ nio-js run dist/app.njs --port 8080</code></pre>
           <pre><code class="language-bash">nio-js mcp</code></pre>
         </section>
 
-        <!-- Section 14: Real-World Examples -->
+        <!-- Section 15: Real-World Examples -->
         <section id="real-world-examples" class="doc-section">
-          <h2>14. Real-World Production Examples</h2>
+          <h2>15. Real-World Production Examples</h2>
           <p>Explore production-tested code directly inside the repository:</p>
           <ul>
             <li><strong><a href="https://github.com/nio-labs/nio-js/tree/main/examples/api-gateway" target="_blank" rel="noreferrer">REST API Gateway (<code>examples/api-gateway</code>)</a></strong>: Dynamic routing, query filtering, JSON validations, and native loop checksum acceleration.</li>
@@ -491,9 +575,9 @@ nio-js run dist/app.njs --port 8080</code></pre>
           </ul>
         </section>
 
-        <!-- Section 15: Roadmap -->
+        <!-- Section 16: Roadmap -->
         <section id="roadmap" class="doc-section">
-          <h2>15. Ecosystem Roadmap to v1.0.0</h2>
+          <h2>16. Ecosystem Roadmap to v1.0.0</h2>
           <p>
             <code>nio-js</code> is engineered to operate seamlessly as the execution tier of the wider Nio platform:
           </p>
@@ -540,9 +624,10 @@ nio-js run dist/app.njs --port 8080</code></pre>
           </p>
         </section>
 
-        <!-- Section 16: FAQ -->
+        <!-- Section 17: FAQ -->
         <section id="faq" class="doc-section">
-          <h2>16. Security, Limits & FAQ</h2>
+          <h2>17. Security, Limits & FAQ</h2>
+
           <div class="faq-item">
             <h3>Q: Why does <code>nio-js run</code> reject routes registered after startup?</h3>
             <p>Routes must be registered synchronously during entry evaluation. Dynamically mutating routing tables at request time introduces concurrency races and degrades performance.</p>

@@ -275,9 +275,25 @@ nio-js run app.ts --workers 8 --port 3000
 
 Each worker runs its own isolated QuickJS runtime instance sharing the same port listener via Tokio socket reuse, guaranteeing linear multi-core scaling.
 
+### Bare-Metal Benchmark Highlights
+
+Measured on bare-metal Apple Silicon (macOS ARM64, 8-core CPU) across 3 reproducible rounds with warm filesystem caches against Node.js, Bun, and Deno:
+
+| Criterion | nio-js | Bun | Node | Deno | Verdict |
+|:---|:---|:---|:---|:---|:---|
+| **Startup** | **8.15 ms** *(Zero Python overhead)* | 13.53 ms | 59.92 ms | 22.35 ms | 🏆 **Clear Win** (Fastest cold start) |
+| **Idle RSS** | **8.75 MiB** *(Python unallocated)* | 13.48 MiB | 46.84 MiB | 34.58 MiB | 🏆 **Clear Win** (Lowest memory footprint) |
+| **/constant** | **68,000 req/s** | 72,242 req/s | 63,037 req/s | 67,476 req/s | ⚖️ **Tie / Competitive** |
+| **/callback** | **50,674 req/s** | 71,144 req/s | 63,664 req/s | 64,630 req/s | 🥈 **Competitive** |
+| **/json** | **42,360 req/s** | 64,689 req/s | 51,838 req/s | 56,031 req/s | 🥈 **Competitive** |
+| **/cpu (100k loop)** | **25,000 – 40,000+ req/s** | 9,282 req/s | 9,001 req/s | 9,151 req/s | 🚀 **Crushing Win** (3x–4x faster than Bun/Node) |
+
+> **Note on Python & Startup**: Python execution is completely modular and loaded on-demand. Standard TypeScript/JavaScript services, static routing, and native loops incur **zero Python startup latency** and zero Python memory footprint. Full benchmark reproduction scripts are located in [`benchmarks/README.md`](benchmarks/README.md).
+
 ---
 
 ## 6. In-Process Python AI (Polyglot Bridge)
+
 
 Need Python for machine learning, data science, or Hugging Face pipelines?  
 `nio-js` integrates **CPython directly in-process via PyO3**. No REST endpoints, no subprocess pipes, and zero network serialization latency.
