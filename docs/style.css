@@ -308,9 +308,16 @@ a:hover {
   text-decoration: underline;
 }
 
-/* Inline Code */
+/* Code Blocks & Inline Code */
+code,
+pre,
+pre[class*="language-"],
+code[class*="language-"],
+.token {
+  font-family: 'Google Sans Code', ui-monospace, monospace !important;
+}
+
 code:not([class*="language-"]) {
-  font-family: var(--font-mono);
   font-size: 13.5px;
   background-color: var(--bg-secondary);
   color: #0969da;
@@ -319,9 +326,7 @@ code:not([class*="language-"]) {
   border: 1px solid var(--border-color);
 }
 
-/* Code Blocks */
 pre[class*="language-"] {
-  font-family: var(--font-mono) !important;
   font-size: 13.5px !important;
   background-color: var(--code-bg) !important;
   border: 1px solid var(--border-color) !important;
@@ -331,6 +336,7 @@ pre[class*="language-"] {
   overflow-x: auto;
   color: #24292f !important;
 }
+
 
 .architecture-diagram pre {
   background-color: var(--code-bg);
