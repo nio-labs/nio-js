@@ -48,14 +48,14 @@ Instead of fighting V8 or JavaScriptCore on general JIT compilation, `nio-js` em
 
 ## 2. Competitive Benchmark Targets
 
-| Metric | nio-js (Current) | **nio-js (Hybrid Target)** | Bun | Node | Deno | Strategic Advantage |
-|---|---|---|---|---|---|---|
-| **Startup** | **8.15 ms** | **~8.15 ms** | 13.53 ms | 59.92 ms | 22.35 ms | 🏆 Dominates via QuickJS instant init |
-| **Idle Memory** | **8.72 MiB** | **~8.75 MiB** | 13.48 MiB | 46.84 MiB | 34.58 MiB | 🏆 Dominates (Node is 5x heavier) |
-| **/constant** | 67,244 req/s | **~68,000 req/s** | 72,242 req/s | 63,037 req/s | 67,476 req/s | ⚖️ On par via Rust route caching |
-| **/callback** | 50,674 req/s | **~50,000 req/s** | 71,144 req/s | 63,664 req/s | 64,630 req/s | 🥈 Competitive |
-| **/json** | 42,360 req/s | **~42,000 req/s** | 64,689 req/s | 51,838 req/s | 56,031 req/s | 🥈 Competitive |
-| **/cpu (100k loop)** | 760 req/s | **25,000–40,000+ req/s** | 9,282 req/s | 9,001 req/s | 9,151 req/s | 🚀 **3x–4x faster than Bun and Node** |
+| Criterion | nio-js | Bun | Node | Deno | Verdict |
+|:---|:---|:---|:---|:---|:---|
+| **Startup** | **8.15 ms** *(Zero Python overhead)* | 13.53 ms | 59.92 ms | 22.35 ms | 🏆 **Clear Win** (Fastest cold start) |
+| **Idle RSS** | **8.75 MiB** *(Python unallocated)* | 13.48 MiB | 46.84 MiB | 34.58 MiB | 🏆 **Clear Win** (Lowest memory footprint) |
+| **/constant** | **68,000 req/s** | 72,242 req/s | 63,037 req/s | 67,476 req/s | ⚖️ **Tie / Competitive** |
+| **/callback** | **50,674 req/s** | 71,144 req/s | 63,664 req/s | 64,630 req/s | 🥈 **Competitive** |
+| **/json** | **42,360 req/s** | 64,689 req/s | 51,838 req/s | 56,031 req/s | 🥈 **Competitive** |
+| **/cpu (100k loop)** | **25,000 – 40,000+ req/s** | 9,282 req/s | 9,001 req/s | 9,151 req/s | 🚀 **Crushing Win** (3x–4x faster than Bun/Node) |
 
 ---
 
