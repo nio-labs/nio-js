@@ -330,14 +330,65 @@ code:not([class*="language-"]) {
 
 pre[class*="language-"] {
   font-size: 13.5px !important;
-  background-color: var(--code-bg) !important;
-  border: 1px solid var(--border-color) !important;
+  background-color: #f6f8fa !important;
+  border: 1px solid #d0d7de !important;
   border-radius: 8px !important;
   padding: 16px !important;
   margin-bottom: 20px !important;
   overflow-x: auto;
+  color: #1f2328 !important;
+}
+
+/* High-Contrast Syntax Colors */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #57606a !important;
+  font-style: italic;
+}
+
+.token.keyword,
+.token.operator {
+  color: #cf222e !important;
+  font-weight: 600;
+}
+
+.token.string,
+.token.char,
+.token.attr-value {
+  color: #0a3069 !important;
+}
+
+.token.function,
+.token.class-name {
+  color: #8250df !important;
+  font-weight: 600;
+}
+
+.token.number,
+.token.boolean {
+  color: #0550ae !important;
+  font-weight: 600;
+}
+
+.token.punctuation {
   color: #24292f !important;
 }
+
+.token.property,
+.token.tag,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: #0550ae !important;
+}
+
+.token.variable,
+.token.parameter {
+  color: #953800 !important;
+}
+
 
 
 .architecture-diagram pre {
