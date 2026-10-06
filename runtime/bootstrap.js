@@ -149,7 +149,7 @@
       body = result;
       if (options.headers === undefined && (options.status === undefined || options.status === 200)) {
         if (body.length > __nioMaxBody) throw new RangeError('Response exceeds byte limit');
-        return [200, 1, body];
+        return body;
       }
       type = 'text/plain; charset=utf-8';
     } else if (result instanceof Blob) {
@@ -158,7 +158,7 @@
       body = JSON.stringify(result);
       if (options.headers === undefined && (options.status === undefined || options.status === 200)) {
         if (body.length > __nioMaxBody) throw new RangeError('Response exceeds byte limit');
-        return [200, 2, body];
+        return '\0J' + body;
       }
       type = 'application/json; charset=utf-8';
     } else throw new TypeError('Unsupported handler return value');
@@ -257,8 +257,7 @@
   globalThis.__nioDispatch = (route, input) => {
     const handler = routes[route]?.handler;
     if (typeof handler !== 'function') throw new Error('Invalid callback route');
-    const req = handler.length === 0 ? emptyReq : new LazyRequest(input);
-    const result = handler(req);
+    const result = handler.length === 0 ? handler() : handler(new LazyRequest(input));
     return result !== null && (typeof result === 'object' || typeof result === 'function') && typeof result.then === 'function'
       ? Promise.resolve(result).then(encodeReply) : encodeReply(result);
   };

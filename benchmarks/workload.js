@@ -1,4 +1,5 @@
 export const hello = 'Hello World';
+/** @native */
 export function json() {
   return { message: hello, items: Array.from({ length: 20 }, (_, id) => ({ id, name: `item-${id}` })) };
 }

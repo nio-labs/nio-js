@@ -7,7 +7,7 @@ use axum::{
     Router,
     body::{Body, Bytes, to_bytes},
     extract::{Request, State},
-    http::{HeaderMap, HeaderName, HeaderValue, StatusCode},
+    http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header},
     response::Response,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -118,7 +118,51 @@ impl CachedReply {
     }
 }
 fn response(reply: Reply, id: u64) -> Result<Response> {
-    Ok(CachedReply::new(reply)?.response(id))
+    let status = StatusCode::from_u16(reply.status)?;
+    let mut r = Response::new(
+        if status == StatusCode::NO_CONTENT || status == StatusCode::NOT_MODIFIED {
+            Body::empty()
+        } else {
+            Body::from(reply.body)
+        },
+    );
+    *r.status_mut() = status;
+    let headers = r.headers_mut();
+    match reply.fast_type {
+        1 => {
+            headers.insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("text/plain; charset=utf-8"),
+            );
+        }
+        2 => {
+            headers.insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json; charset=utf-8"),
+            );
+        }
+        _ => {
+            for (key, value) in reply.headers {
+                let name = HeaderName::try_from(key)?;
+                if !matches!(
+                    name.as_str(),
+                    "connection"
+                        | "transfer-encoding"
+                        | "content-length"
+                        | "upgrade"
+                        | "keep-alive"
+                        | "trailer"
+                ) {
+                    headers.insert(name, HeaderValue::try_from(value)?);
+                }
+            }
+        }
+    }
+    headers.insert(
+        HeaderName::from_static("x-request-id"),
+        HeaderValue::from_str(&id.to_string()).unwrap(),
+    );
+    Ok(r)
 }
 fn error(status: StatusCode, message: &str, id: u64) -> Response {
     let mut r = Response::new(Body::from(
@@ -365,10 +409,10 @@ async fn handle(State(app): State<App>, request: Request) -> Response {
             id,
         );
     }
-    match tokio::time::timeout(app.limits.timeout * 9, response_rx).await {
-        Ok(Ok(Ok(reply))) => response(reply, id)
+    match response_rx.await {
+        Ok(Ok(reply)) => response(reply, id)
             .unwrap_or_else(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Invalid response", id)),
-        Ok(Ok(Err(message))) => error(
+        Ok(Err(message)) => error(
             if message.contains("deadline") || message.contains("interrupted") {
                 StatusCode::GATEWAY_TIMEOUT
             } else {
@@ -377,7 +421,7 @@ async fn handle(State(app): State<App>, request: Request) -> Response {
             "Handler failed",
             id,
         ),
-        _ => error(StatusCode::SERVICE_UNAVAILABLE, "Execution unavailable", id),
+        Err(_) => error(StatusCode::SERVICE_UNAVAILABLE, "Execution unavailable", id),
     }
 }
 async fn shutdown() {

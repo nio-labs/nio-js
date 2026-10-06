@@ -38,12 +38,36 @@ pub struct Reply {
 }
 impl<'js> FromJs<'js> for Reply {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
+        if let Some(s) = value.as_string() {
+            let s_str = s.to_string()?;
+            return if let Some(json_body) = s_str.strip_prefix("\0J") {
+                Ok(Self {
+                    status: 200,
+                    headers: Vec::new(),
+                    body: Bytes::copy_from_slice(json_body.as_bytes()),
+                    fast_type: 2,
+                })
+            } else {
+                Ok(Self {
+                    status: 200,
+                    headers: Vec::new(),
+                    body: Bytes::copy_from_slice(s_str.as_bytes()),
+                    fast_type: 1,
+                })
+            };
+        }
         if let Some(array) = value.as_array() {
             let status: u16 = array.get(0)?;
-            let fast_type: u8 = array.get(1)?;
+            let mut fast_type: u8 = array.get(1)?;
             let raw: Value = array.get(2)?;
             let body = if raw.is_string() {
-                Bytes::from(String::from_js(ctx, raw)?.into_bytes())
+                let s = String::from_js(ctx, raw)?;
+                if let Some(json_body) = s.strip_prefix("\0J") {
+                    fast_type = 2;
+                    Bytes::copy_from_slice(json_body.as_bytes())
+                } else {
+                    Bytes::from(s.into_bytes())
+                }
             } else {
                 let array = TypedArray::<u8>::from_js(ctx, raw)?;
                 let bytes = unsafe { array.as_bytes() }.ok_or(rquickjs::Error::Unknown)?;
@@ -233,6 +257,19 @@ impl Engine {
                         }
                         Ok((value as u32).to_string())
                     }
+                    "json" => {
+                        let mut out = String::with_capacity(512);
+                        out.push_str("\0J{\"message\":\"Hello World\",\"items\":[");
+                        for i in 0..20 {
+                            if i > 0 {
+                                out.push(',');
+                            }
+                            use std::fmt::Write as _;
+                            let _ = write!(out, "{{\"id\":{i},\"name\":\"item-{i}\"}}");
+                        }
+                        out.push_str("]}");
+                        Ok(out)
+                    }
                     _ => Err(rquickjs::Error::Unknown),
                 }
             })?)?;
@@ -333,10 +370,13 @@ impl Engine {
         // Keep the promise rooted in the context while host I/O runs outside it.
         let immediate = self.context.with(|ctx| -> Result<Option<Reply>> {
             let f: Function = ctx.globals().get("__nioDispatch")?;
-            let value: Value = f
-                .call((route as u32, input))
-                .catch(&ctx)
-                .map_err(|e| anyhow::anyhow!("handler: {e}"))?;
+            let value: Value = if input.is_empty() {
+                f.call((route as u32, ()))
+            } else {
+                f.call((route as u32, input))
+            }
+            .catch(&ctx)
+            .map_err(|e| anyhow::anyhow!("handler: {e}"))?;
             if value.is_promise() {
                 ctx.globals().set("__nioActive", value)?;
                 Ok(None)
