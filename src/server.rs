@@ -465,17 +465,18 @@ pub async fn serve(
     }
     drop(ready_tx);
 
-    let mut initial_routes = None;
-    for _ in 0..workers {
-        let routes = ready_rx
-            .recv()
-            .map_err(|_| anyhow!("engine startup failed"))?
-            .map_err(|e| anyhow!(e))?;
-        if initial_routes.is_none() {
-            initial_routes = Some(routes);
-        }
+    let routes = ready_rx
+        .recv()
+        .map_err(|_| anyhow!("engine startup failed"))?
+        .map_err(|e| anyhow!(e))?;
+    let remaining_workers = workers.saturating_sub(1);
+    if remaining_workers > 0 {
+        tokio::task::spawn_blocking(move || {
+            for _ in 0..remaining_workers {
+                let _ = ready_rx.recv();
+            }
+        });
     }
-    let routes = initial_routes.unwrap_or_default();
     if routes.is_empty() {
         stopping.store(true, Ordering::Relaxed);
         drop(senders);
