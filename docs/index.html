@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>nio-js Docs — The Hybrid, Agent-Native Worker Runtime</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+</head>
+<body>
+  <!-- Mobile Hamburger Header -->
+  <header class="mobile-header">
+    <button class="hamburger-btn" id="menuToggle" aria-label="Toggle navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <a href="#" class="brand-title">
+      <span class="brand-logo">⚡</span>
+      <span class="brand-name">nio-js</span>
+      <span class="badge">v0.2.0</span>
+    </a>
+  </header>
+
+  <div class="layout">
+    <!-- Left Navigation Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <a href="#" class="sidebar-brand">
+          <span class="brand-logo">⚡</span>
+          <div>
+            <div class="brand-name">nio-js</div>
+            <div class="brand-sub">Agent-Native Worker Runtime</div>
+          </div>
+        </a>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">Getting Started</div>
+          <a href="#overview" class="nav-link active">1. Overview & Architecture</a>
+          <a href="#installation" class="nav-link">2. Installation & Quickstart</a>
+          <a href="#cli-reference" class="nav-link">3. CLI Command Reference</a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">Worker Runtime API</div>
+          <a href="#route-registration" class="nav-link">4. Route Registration</a>
+          <a href="#request-response" class="nav-link">5. Requests, Responses & Status</a>
+          <a href="#url-params-queries" class="nav-link">6. Parameters & Query Strings</a>
+          <a href="#body-parsing" class="nav-link">7. Body Parsing (JSON / Uploads)</a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">Hybrid Engine & AI</div>
+          <a href="#native-acceleration" class="nav-link">8. Native Acceleration (/** @native */)</a>
+          <a href="#multi-worker" class="nav-link">9. Multi-Core Worker Pinning</a>
+          <a href="#python-ai" class="nav-link">10. In-Process Python AI (PyO3)</a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">Packaging & Ecosystem</div>
+          <a href="#dependencies" class="nav-link">11. Zero-Node Dependencies & Lockfiles</a>
+          <a href="#capsules" class="nav-link">12. Single-File Capsules (.njs)</a>
+          <a href="#agent-mcp" class="nav-link">13. Agent Diagnostics & Stdio MCP</a>
+          <a href="#real-world-examples" class="nav-link">14. Real-World Production Examples</a>
+          <a href="#roadmap" class="nav-link">15. Ecosystem Roadmap to v1.0.0</a>
+          <a href="#faq" class="nav-link">16. Security, Limits & FAQ</a>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="https://github.com/nio-labs/nio-js" target="_blank" rel="noreferrer" class="github-link">
+          <svg height="18" width="18" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+          </svg>
+          <span>GitHub: nio-labs/nio-js</span>
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="content-wrapper">
+      <div class="content-container">
+
+        <!-- Section 1: Overview -->
+        <section id="overview" class="doc-section">
+          <div class="hero-header">
+            <div class="hero-badges">
+              <span class="badge badge-accent">Release v0.2.0</span>
+              <span class="badge">Sub-millisecond Boot</span>
+              <span class="badge">68k+ req/sec</span>
+              <span class="badge">Rust + QuickJS + PyO3</span>
+            </div>
+            <h1 class="hero-title">The Hybrid, Agent-Native Worker Runtime</h1>
+            <p class="hero-desc">
+              Write simple TypeScript/JavaScript handlers. Import dependencies directly by URL. Offload compute to native Rust and in-process Python AI. Package your verified application into a single immutable <code>.njs</code> capsule.
+            </p>
+          </div>
+
+          <h2>1. Mental Model & Architecture</h2>
+          <p>
+            Traditional runtimes (Node.js, Deno, Bun) are designed for heavy server runtimes with deep dependency graphs, long startup times, and hundreds of megabytes of <code>node_modules</code>.
+          </p>
+          <p>
+            <strong>nio-js</strong> reimagines workers for the AI agent era:
+          </p>
+          <ul>
+            <li><strong>Engine Core</strong>: Embedded QuickJS-NG (<code>rquickjs</code> 0.14) inside an asynchronous multi-threaded <strong>Tokio / Hyper Rust host</strong>.</li>
+            <li><strong>Sub-Millisecond Cold Starts</strong>: Boots in <strong>&lt; 1 ms</strong> with a clean baseline under <strong>15 MB of RAM</strong>.</li>
+            <li><strong>Hybrid Compute Offloading</strong>: JavaScript handles routing and JSON orchestration. Heavy loops escape to <strong>native Rust machine code</strong> (<code>/** @native */</code>) or in-process <strong>Python AI algorithms</strong> via PyO3.</li>
+            <li><strong>Zero <code>node_modules</code></strong>: Modules are imported by HTTPS URL (esm.sh / UNPKG) with cryptographic SHA-256 lockfile pinning.</li>
+            <li><strong>Tamper-Proof Capsules</strong>: Ship a production app in one portable <code>.njs</code> file containing verified bytecode/source, asset tables, and permission envelopes.</li>
+          </ul>
+
+          <div class="architecture-diagram">
+            <pre><code>┌────────────────────────────────────────────────────────────────────────┐
+│                          nio-js Host (Rust)                            │
+│                                                                        │
+│  ┌───────────────────────┐          ┌───────────────────────────────┐  │
+│  │    Tokio HTTP Core    │          │   Multi-Worker Thread Pool    │  │
+│  │ (Reusable Port Socket)│          │   (Pinned per CPU Core)       │  │
+│  └───────────┬───────────┘          └───────────────┬───────────────┘  │
+│              │                                      │                  │
+│              ▼                                      ▼                  │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                       QuickJS Runtime                            │  │
+│  │   • Ultra-fast routing ('nio.js')                                │  │
+│  │   • Direct string & zero-alloc JSON serialization                │  │
+│  └───────────┬──────────────────────────────────────┬───────────────┘  │
+│              │                                      │                  │
+│              ▼                                      ▼                  │
+│  ┌────────────────────────┐              ┌──────────────────────────┐  │
+│  │   /** @native */       │              │    In-Process Python     │  │
+│  │   Rust Offloading      │              │  (PyO3 CPython Engine)   │  │
+│  └────────────────────────┘              └──────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────┘</code></pre>
+          </div>
+        </section>
+
+        <!-- Section 2: Installation -->
+        <section id="installation" class="doc-section">
+          <h2>2. Installation & Quickstart</h2>
+
+          <h3>Automated One-Line Install</h3>
+          <p>For macOS, Linux, and Android (Termux):</p>
+          <pre><code class="language-bash">curl -fsSL https://raw.githubusercontent.com/nio-labs/nio-js/main/install.sh | bash</code></pre>
+
+          <p>For Windows (PowerShell):</p>
+          <pre><code class="language-powershell">irm https://raw.githubusercontent.com/nio-labs/nio-js/main/install.ps1 | iex</code></pre>
+
+          <h3>Using the NPM Launcher</h3>
+          <pre><code class="language-bash"># Run without installing:
+npx @nio-labs/nio-js --help
+
+# Or install globally:
+npm install -g @nio-labs/nio-js</code></pre>
+
+          <h3>Building from Source</h3>
+          <pre><code class="language-bash">git clone https://github.com/nio-labs/nio-js.git
+cd nio-js
+cargo build --release
+sudo install -m 755 target/release/nio-js /usr/local/bin/nio-js</code></pre>
+        </section>
+
+        <!-- Section 3: CLI Reference -->
+        <section id="cli-reference" class="doc-section">
+          <h2>3. CLI Command Reference</h2>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Arguments / Options</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>nio-js run &lt;entry&gt;</code></td>
+                  <td><code>--port &lt;p&gt;</code>, <code>--host &lt;h&gt;</code>, <code>--workers &lt;n&gt;</code></td>
+                  <td>Launch a live dev server from a <code>.ts</code>, <code>.js</code>, or <code>.njs</code> file.</td>
+                </tr>
+                <tr>
+                  <td><code>nio-js build &lt;entry&gt;</code></td>
+                  <td><code>-o &lt;out.njs&gt;</code>, <code>--update</code>, <code>--frozen</code>, <code>--offline</code></td>
+                  <td>Resolve, download, and bundle all dependencies into an immutable capsule.</td>
+                </tr>
+                <tr>
+                  <td><code>nio-js check &lt;entry&gt;</code></td>
+                  <td><code>--format=agent-json</code>, <code>--format=pretty</code></td>
+                  <td>Perform instant syntax and module dependency validation without listening.</td>
+                </tr>
+                <tr>
+                  <td><code>nio-js mcp</code></td>
+                  <td><em>None (stdio transport)</em></td>
+                  <td>Run standard Model Context Protocol server for Claude, Cursor, and Nio.</td>
+                </tr>
+                <tr>
+                  <td><code>nio-js inspect &lt;capsule&gt;</code></td>
+                  <td><em>Path to <code>.njs</code> file</em></td>
+                  <td>Display capsule graph topology, SHA-256 digests, and embedded assets.</td>
+                </tr>
+                <tr>
+                  <td><code>nio-js verify &lt;capsule&gt;</code></td>
+                  <td><em>Path to <code>.njs</code> file</em></td>
+                  <td>Cryptographically verify all digest checksums and graph integrity.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Section 4: Route Registration -->
+        <section id="route-registration" class="doc-section">
+          <h2>4. Route Registration</h2>
+          <p>
+            Services import methods directly from <code>'nio.js'</code>. Supported verbs include <code>get</code>, <code>post</code>, <code>put</code>, <code>del</code>, <code>patch</code>, <code>head</code>, and <code>options</code>:
+          </p>
+          <pre><code class="language-typescript">import { get, post, del } from 'nio.js';
+
+// 1. Zero-JS constant route: evaluated once, served instantly from Rust host
+get('/', 'Hello from nio-js!');
+
+// 2. Synchronous handler
+get('/health', () => ({ status: 'ok', uptime: 104 }));
+
+// 3. Asynchronous handler
+get('/stats', async () => {
+  const dbData = await fetchExternalData();
+  return { data: dbData };
+});</code></pre>
+
+          <div class="callout callout-info">
+            <strong>Registration Lifecycle:</strong> Routes must be registered during the evaluation of the entry file. Once the server binds to its port, registration closes permanently to prevent dynamic race conditions.
+          </div>
+        </section>
+
+        <!-- Section 5: Requests & Responses -->
+        <section id="request-response" class="doc-section">
+          <h2>5. Requests, Responses & Status Codes</h2>
+          <p>
+            Handlers can return primitive values, plain JSON objects, binary buffers, or explicitly formatted responses via <code>reply()</code>:
+          </p>
+          <pre><code class="language-typescript">import { post, reply } from 'nio.js';
+
+post('/api/orders', async ({ json }) => {
+  const order = await json();
+  if (!order.item) {
+    return reply(
+      { error: 'Field "item" is required' },
+      { status: 400, headers: { 'x-service-error': 'VALIDATION_ERR' } }
+    );
+  }
+
+  return reply({ orderId: 'ord_99', status: 'created' }, { status: 201 });
+});</code></pre>
+
+          <h3>Response Type Coercion Table</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Return Value</th>
+                  <th>HTTP Status</th>
+                  <th>Content-Type</th>
+                  <th>Internal Pipeline</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>string</code></td>
+                  <td>200 OK</td>
+                  <td><code>text/plain; charset=utf-8</code></td>
+                  <td>Direct Tokio byte stream</td>
+                </tr>
+                <tr>
+                  <td><code>Object / Array</code></td>
+                  <td>200 OK</td>
+                  <td><code>application/json</code></td>
+                  <td>Direct native Rust JSON serializer</td>
+                </tr>
+                <tr>
+                  <td><code>Blob / File</code></td>
+                  <td>200 OK</td>
+                  <td>Declared MIME or <code>application/octet-stream</code></td>
+                  <td>Streaming byte buffer</td>
+                </tr>
+                <tr>
+                  <td><code>reply(body, opts)</code></td>
+                  <td>Custom (e.g. 201, 400, 404)</td>
+                  <td>Inferred or custom headers</td>
+                  <td>Direct response wrapper</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Section 6: Parameters & Queries -->
+        <section id="url-params-queries" class="doc-section">
+          <h2>6. Parameters & Query Strings</h2>
+          <p>
+            Route parameters use <code>:param</code> syntax and are accessed via <code>req.params</code>. Query strings are parsed into <code>req.query</code>:
+          </p>
+          <pre><code class="language-typescript">import { get, reply } from 'nio.js';
+
+// Matches /api/v1/users/usr_101
+get('/api/v1/users/:id', ({ params }) => {
+  return { requestedUser: params.id };
+});
+
+// Matches /search?role=admin&limit=20
+get('/search', ({ query }) => {
+  const role = query.role || 'all';
+  const limit = Number(query.limit || 10);
+  return { role, limit };
+});</code></pre>
+        </section>
+
+        <!-- Section 7: Body Parsing -->
+        <section id="body-parsing" class="doc-section">
+          <h2>7. Body Parsing (JSON & Multipart)</h2>
+          <p>
+            Request bodies can be consumed exactly once via <code>.json()</code>, <code>.text()</code>, <code>.blob()</code>, or <code>.formData()</code>:
+          </p>
+          <pre><code class="language-typescript">import { post, reply } from 'nio.js';
+
+// 1. JSON Body Parsing
+post('/api/users', async ({ json }) => {
+  const body = await json();
+  return reply({ created: body.name }, { status: 201 });
+});
+
+// 2. File & Multipart Uploads
+post('/api/upload', async ({ formData }) => {
+  const form = await formData();
+  const file = form.get('file');
+
+  if (!(file instanceof File)) {
+    return reply({ error: 'Missing uploaded file' }, { status: 400 });
+  }
+
+  return {
+    filename: file.name,
+    bytes: file.size,
+    preview: (await file.text()).slice(0, 100)
+  };
+});</code></pre>
+        </section>
+
+        <!-- Section 8: Native Acceleration -->
+        <section id="native-acceleration" class="doc-section">
+          <h2>8. Native Acceleration (<code>/** @native */</code>)</h2>
+          <p>
+            For CPU-intensive tasks, <code>nio-js</code> provides the <code>/** @native */</code> directive. Functions marked with this directive bypass QuickJS execution overhead and run compiled Rust machine code:
+          </p>
+          <pre><code class="language-typescript">import { get } from 'nio.js';
+
+/** @native */
+function calculateChecksum(iterations: number): number {
+  let acc = 0;
+  for (let i = 0; i < iterations; i++) {
+    acc = (acc * 31 + i) & 0x7fffffff;
+  }
+  return acc;
+}
+
+get('/metrics/compute', ({ query }) => {
+  const rounds = Number(query.rounds || 100000);
+  return {
+    rounds,
+    result: calculateChecksum(rounds)
+  };
+});</code></pre>
+
+          <div class="callout callout-success">
+            <strong>Benchmark Performance:</strong> Under a 100,000 iteration loop benchmark, <code>nio-js</code> with native acceleration scores <strong>25,000 – 40,000+ req/s</strong>, outperforming Node (9,282 req/s) and Bun (9,001 req/s) by <strong>3x to 4x</strong>.
+          </div>
+        </section>
+
+        <!-- Section 9: Multi-Worker Pinning -->
+        <section id="multi-worker" class="doc-section">
+          <h2>9. Multi-Core Worker Pinning</h2>
+          <p>
+            Scale across all CPU cores effortlessly. Every worker maintains its own isolated QuickJS runtime and thread-safe engine instance sharing a single socket listener:
+          </p>
+          <pre><code class="language-bash"># Run pinned to 8 worker threads on port 3000
+nio-js run app.ts --port 3000 --workers 8</code></pre>
+        </section>
+
+        <!-- Section 10: In-Process Python AI -->
+        <section id="python-ai" class="doc-section">
+          <h2>10. In-Process Python AI (PyO3)</h2>
+          <p>
+            Execute machine learning, data transforms, and Python algorithms in-process with <strong>zero IPC, zero sockets, and zero child processes</strong>:
+          </p>
+
+          <h3>1. Define Python Model (<code>kernel.py</code>)</h3>
+          <pre><code class="language-python">def classify(query: str) -> str:
+    q = query.lower()
+    if any(k in q for k in ["bug", "error", "crash", "fix"]):
+        return "debugging"
+    return "general_task"</code></pre>
+
+          <h3>2. Import & Execute in TypeScript (<code>server.ts</code>)</h3>
+          <pre><code class="language-typescript">import { get } from 'nio.js';
+import { classify } from './kernel.py';
+
+get('/classify', ({ query }) => {
+  const prompt = query.prompt || 'How do I fix this panic?';
+  const category = classify(prompt);
+  return { prompt, category };
+});</code></pre>
+        </section>
+
+        <!-- Section 11: Dependencies -->
+        <section id="dependencies" class="doc-section">
+          <h2>11. Zero-Node Dependencies & Lockfiles</h2>
+          <p>
+            No <code>package.json</code> install steps or bloated <code>node_modules</code>. Import standard ES modules over HTTPS:
+          </p>
+          <pre><code class="language-typescript">import { get } from 'nio.js';
+import { z } from 'https://esm.sh/zod@3.23.8?target=es2022';
+
+const Schema = z.object({ id: z.string() });
+get('/validate', ({ query }) => ({ valid: Schema.safeParse(query).success }));</code></pre>
+
+          <h3>Lockfile Lifecycle</h3>
+          <pre><code class="language-bash"># Build and generate or update nio.lock
+nio-js build app.ts --update -o app.njs
+
+# Strictly enforce cached hashes in CI/CD (fails if checksum mismatch)
+nio-js build app.ts --frozen -o app.njs
+
+# Offline & air-gapped production builds (zero network requests)
+nio-js build app.ts --offline --frozen -o app.njs</code></pre>
+        </section>
+
+        <!-- Section 12: Capsules -->
+        <section id="capsules" class="doc-section">
+          <h2>12. Single-File Capsules (<code>.njs</code>)</h2>
+          <p>
+            A capsule bundles the complete graph, assets, cryptographic hashes, and capability envelope into a portable artifact:
+          </p>
+          <pre><code class="language-bash"># 1. Build capsule with embedded assets
+nio-js build app.ts --asset logo.svg=assets/logo.svg -o dist/app.njs
+
+# 2. Inspect graph and metadata
+nio-js inspect dist/app.njs
+
+# 3. Cryptographically verify
+nio-js verify dist/app.njs
+
+# 4. Run standalone in production
+nio-js run dist/app.njs --port 8080</code></pre>
+        </section>
+
+        <!-- Section 13: Agent MCP -->
+        <section id="agent-mcp" class="doc-section">
+          <h2>13. Agent Diagnostics & Stdio MCP</h2>
+          <p>
+            Engineered specifically to support autonomous agents like Antigravity, Claude, and Cursor:
+          </p>
+
+          <h3>Fast Structured Diagnostics (<code>nio-js check</code>)</h3>
+          <pre><code class="language-bash">nio-js check src/app.ts --format=agent-json</code></pre>
+          <pre><code class="language-json">{
+  "valid": true,
+  "modules_count": 4,
+  "errors": []
+}</code></pre>
+
+          <h3>Stdio Model Context Protocol (<code>nio-js mcp</code>)</h3>
+          <p>
+            Expose compile, syntax check, and isolated code evaluation tools directly to AI coding agents over standard JSON-RPC:
+          </p>
+          <pre><code class="language-bash">nio-js mcp</code></pre>
+        </section>
+
+        <!-- Section 14: Real-World Examples -->
+        <section id="real-world-examples" class="doc-section">
+          <h2>14. Real-World Production Examples</h2>
+          <p>Explore production-tested code directly inside the repository:</p>
+          <ul>
+            <li><strong><a href="https://github.com/nio-labs/nio-js/tree/main/examples/api-gateway" target="_blank" rel="noreferrer">REST API Gateway (<code>examples/api-gateway</code>)</a></strong>: Dynamic routing, query filtering, JSON validations, and native loop checksum acceleration.</li>
+            <li><strong><a href="https://github.com/nio-labs/nio-js/tree/main/examples/ai-agent-service" target="_blank" rel="noreferrer">AI Agent Worker (<code>examples/ai-agent-service</code>)</a></strong>: Intent classification, RAG context scoring, and structured task planning powered by in-process Python.</li>
+          </ul>
+        </section>
+
+        <!-- Section 15: Roadmap -->
+        <section id="roadmap" class="doc-section">
+          <h2>15. Ecosystem Roadmap to v1.0.0</h2>
+          <p>
+            <code>nio-js</code> is engineered to operate seamlessly as the execution tier of the wider Nio platform:
+          </p>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Milestone</th>
+                  <th>Focus Area</th>
+                  <th>Key Features</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>v0.3.0</strong></td>
+                  <td>Streaming & Agent Protocols</td>
+                  <td>Server-Sent Events (SSE) token streaming, WebSockets, W3C Trace Context.</td>
+                </tr>
+                <tr>
+                  <td><strong>v0.4.0</strong></td>
+                  <td><code>nio-db</code> Native Data Tier</td>
+                  <td>Direct <code>import { db } from 'nio.js'</code>, live SSE mutation consumer, in-memory query cache.</td>
+                </tr>
+                <tr>
+                  <td><strong>v0.5.0</strong></td>
+                  <td><code>nio</code> Agent & Event Bus</td>
+                  <td>Event workers (<code>on()</code>), unified tool registry (<code>tool()</code>) for stdio MCP and Nio CLI plugins.</td>
+                </tr>
+                <tr>
+                  <td><strong>v0.6.0 – v0.7.0</strong></td>
+                  <td>Resilience & Static Assets</td>
+                  <td>Zero-downtime hot reloading, Tokio static file serving, memory isolation caps.</td>
+                </tr>
+                <tr>
+                  <td><strong>v1.0.0</strong></td>
+                  <td>General Availability (GA)</td>
+                  <td>Frozen Capsule v1.0 spec, cross-ecosystem integration tests (<code>nio</code> + <code>nio-db</code> + <code>nio-js</code>).</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            For deep technical details on the roadmap, see the full <a href="https://github.com/nio-labs/nio-js/blob/main/ROADMAP_V1.md" target="_blank" rel="noreferrer">ROADMAP_V1.md document</a>.
+          </p>
+        </section>
+
+        <!-- Section 16: FAQ -->
+        <section id="faq" class="doc-section">
+          <h2>16. Security, Limits & FAQ</h2>
+          <div class="faq-item">
+            <h3>Q: Why does <code>nio-js run</code> reject routes registered after startup?</h3>
+            <p>Routes must be registered synchronously during entry evaluation. Dynamically mutating routing tables at request time introduces concurrency races and degrades performance.</p>
+          </div>
+          <div class="faq-item">
+            <h3>Q: What are the default resource boundaries?</h3>
+            <p>Each QuickJS runtime instance defaults to a 32 MB heap ceiling and a 10 MB maximum request payload. Memory caps prevent rogue scripts from destabilizing the host.</p>
+          </div>
+          <div class="faq-item">
+            <h3>Q: Can I run existing npm modules?</h3>
+            <p>Yes. Any ESM module published to npm can be imported via <code>https://esm.sh/&lt;pkg&gt;</code>. Pure JavaScript and Web standard modules work out of the box.</p>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-powershell.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

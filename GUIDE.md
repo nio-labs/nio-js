@@ -464,4 +464,5 @@ curl -i http://localhost:3000/health
 
 ---
 
-*For upcoming roadmap milestones including native `nio-db` and `nio` integrations, check [ROADMAP_V1.md](ROADMAP_V1.md).*
+*For upcoming roadmap milestones including native `nio-db` and `nio` integrations, check the [ROADMAP_V1.md on GitHub](https://github.com/nio-labs/nio-js/blob/main/ROADMAP_V1.md).*
+
