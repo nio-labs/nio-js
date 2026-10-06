@@ -9,7 +9,10 @@ get('/', 'Hello World')
 
 The engine is embedded through `rquickjs` 0.14 (QuickJS-NG) coupled with a multi-worker Rust host, native loop offloading, and optional in-process Python AI execution. Node and npm are not needed to build or execute this project.
 
+📖 **[Read the Complete Guide to nio-js](GUIDE.md)** *(or browse online at [nio-labs.github.io/nio-js](https://nio-labs.github.io/nio-js/))* for detailed architecture, API reference, native acceleration, and deployment patterns.
+
 ## Run
+
 
 After a release is published, install the standalone CLI:
 
@@ -66,18 +69,18 @@ cargo build --release --locked
 mkdir -p "$HOME/.local/bin"
 install -m 755 target/release/nio-js "$HOME/.local/bin/nio-js"
 export PATH="$HOME/.local/bin:$PATH"
-nio-js run examples/server.ts --port 3000
+nio-js run examples/api-gateway/server.ts --port 3000
 ```
 
-Visit `http://localhost:3000/`. The server binds to `127.0.0.1` by default. Use `--host 0.0.0.0` to listen on other interfaces.
+Visit `http://localhost:3000/health`. The server binds to `127.0.0.1` by default. Use `--host 0.0.0.0` to listen on other interfaces.
 
-The sample includes JSON, query parameters, parameterized routes, POST JSON, and multipart uploads. Scripts without registered routes execute and exit.
+The sample includes JSON responses, query parameters, parameterized routes, and native CPU acceleration. Scripts without registered routes execute and exit.
 
 ```bash
-curl 'http://localhost:3000/greeting?name=Nio'
-curl -X POST http://localhost:3000/echo \
-  -H 'Content-Type: application/json' -d '{"hello":"world"}'
-curl -F file=@examples/assets/hello.txt http://localhost:3000/upload
+curl http://localhost:3000/health
+curl 'http://localhost:3000/api/v1/users?role=admin'
+curl -X POST http://localhost:3000/api/v1/users \
+  -H 'Content-Type: application/json' -d '{"name":"Devin","role":"engineer"}'
 ```
 
 TypeScript is transformed with Oxc. This is not type checking. Include [types/nio.d.ts](types/nio.d.ts) in your editor's TypeScript project; DOM declarations describe the familiar web object types, but runtime support is a subset.
@@ -87,9 +90,9 @@ TypeScript is transformed with Oxc. This is not type checking. Include [types/ni
 Build an application capsule and run it on your server:
 
 ```sh
-nio-js build app.ts -o app.njs
-nio-js verify app.njs
-nio-js run app.njs --host 127.0.0.1 --port 3000
+nio-js build examples/api-gateway/server.ts -o api-gateway.njs
+nio-js verify api-gateway.njs
+nio-js run api-gateway.njs --host 127.0.0.1 --port 3000
 ```
 
 Pin the runtime version and dependency URLs, commit `nio.lock`, and use `--frozen` for subsequent builds (`--offline --frozen` when dependencies are cached). Deploy the verified capsule to your server and run it under a process supervisor such as systemd. Keep the service bound to loopback behind an HTTPS reverse proxy, check an application health route after deployments, and retain the previous capsule and runtime version for rollback. Capsule execution requires neither source files nor the dependency cache.
@@ -97,10 +100,10 @@ Pin the runtime version and dependency URLs, commit `nio.lock`, and use `--froze
 ## Capsules
 
 ```bash
-nio-js build examples/server.ts -o server.njs
-nio-js inspect server.njs
-nio-js verify server.njs
-nio-js run server.njs --port 3000
+nio-js build examples/api-gateway/server.ts -o api-gateway.njs
+nio-js inspect api-gateway.njs
+nio-js verify api-gateway.njs
+nio-js run api-gateway.njs --port 3000
 ```
 
 Capsules are versioned JSON documents containing JavaScript modules, dependency edges, per-object SHA-256 digests, source maps, assets, and required network destinations. They contain portable source, not engine bytecode. Execution requires neither the original source nor the dependency cache and performs no dependency downloads.
@@ -342,6 +345,9 @@ Tests exercise HTTP behavior, uploads, source-to-capsule execution after deletin
 
 Only macOS ARM64 has been exercised in this workspace. Linux, Windows, Termux, and experimental iSH require separate builds and device validation. A local Node/Bun/Deno comparison and reproducible benchmark suite are in [benchmarks/RESULTS.md](benchmarks/RESULTS.md) and [benchmarks/README.md](benchmarks/README.md). Those measurements cover one machine and four small workloads.
 
-## Scope
+## Scope & Roadmap
 
-Nio and nio-db are unchanged. The service launcher, database bindings, AI tools, durable workflows, incident replay, permission diffs, native filesystem mounts, and full standards compliance are deferred. The wider design is in [NIOJS.md](NIOJS.md).
+`nio-js` is evolving towards its v1.0.0 General Availability release, featuring deep native integration with **`nio`** (AI agent & tool bus) and **`nio-db`** (durable database & SSE events).
+
+For the complete milestone timeline, feature breakdown, and architecture design across the Nio ecosystem, see **[ROADMAP_V1.md](ROADMAP_V1.md)**.
+
