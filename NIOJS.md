@@ -4,7 +4,7 @@ The Hybrid, Agent-Native Worker Runtime using QuickJS, a multi-worker Rust host,
 
 **Write simple handlers. Import dependencies by URL. Offload compute to Rust & Python. Package a verified application into one `.njs` capsule.**
 
-Status: design specification with full multi-worker server, agent tooling (MCP server, agent-json checks), native function acceleration, and modular Python AI execution documented in [README.md](README.md) and [HYBRID_ENGINE.md](HYBRID_ENGINE.md).
+Status: design specification with full multi-worker server, agent tooling (MCP server, agent-json checks), native function acceleration, and modular Python AI execution documented in [README.md](README.md).
 
 ## Product direction
 
