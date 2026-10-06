@@ -417,6 +417,16 @@ pub async fn serve(
         std::thread::Builder::new()
             .name(format!("nio-js-engine-{worker_id}"))
             .spawn(move || {
+                #[cfg(target_os = "linux")]
+                unsafe {
+                    let mut cpuset: libc::cpu_set_t = std::mem::zeroed();
+                    libc::CPU_SET(worker_id % (libc::CPU_SETSIZE as usize), &mut cpuset);
+                    let _ = libc::pthread_setaffinity_np(
+                        libc::pthread_self(),
+                        std::mem::size_of::<libc::cpu_set_t>(),
+                        &cpuset,
+                    );
+                }
                 let _done = done;
                 let mut engine = match Engine::new(worker_capsule.clone(), worker_limits.clone()) {
                     Ok(e) => e,

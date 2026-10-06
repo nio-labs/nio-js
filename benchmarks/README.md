@@ -10,12 +10,15 @@ From the `nio-js` directory:
 cargo build --release
 cargo build --release --locked --manifest-path benchmarks/loadgen/Cargo.toml
 mkdir -p benchmarks/.tools
-curl -fL https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-darwin-aarch64.zip -o benchmarks/.tools/bun.zip
-unzip -q benchmarks/.tools/bun.zip -d benchmarks/.tools
+# Download a matching Bun and Deno for your platform, e.g.
+# curl -fL https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64.zip -o benchmarks/.tools/bun.zip
+# unzip -q benchmarks/.tools/bun.zip -d benchmarks/.tools && mv benchmarks/.tools/bun-linux-x64/bun benchmarks/.tools/bun-linux-x64/bun
+# curl -fL https://github.com/denoland/deno/releases/download/v2.9.4/deno-x86_64-unknown-linux-gnu.zip -o benchmarks/.tools/deno.zip
+# unzip -q benchmarks/.tools/deno.zip -d benchmarks/.tools && mv benchmarks/.tools/deno benchmarks/.tools/deno-linux-x64/deno
 python3 benchmarks/run.py
 ```
 
-Requires Node and Deno on PATH, Python 3, macOS `ps`/`sysctl`, and permission to bind localhost sockets. Bun stays inside the ignored tools directory. Pin Node and Deno to the versions recorded in `results.json` for a closer reproduction. nio-js uses a release build and the normal default limits, with multi-worker JavaScript dispatch.
+Requires Node and Deno (or pre-downloaded into benchmarks/.tools), Python 3, a process-memory tool (Linux `ps` / macOS `ps`), and permission to bind localhost sockets. Bun stays inside the ignored tools directory. Pin Node and Deno to the versions recorded in `results.json` for a closer reproduction. nio-js uses a release build and the normal default limits, with multi-worker JavaScript dispatch.
 
 Use `python3 benchmarks/run.py --no-baseline` for a four-runtime comparison even when a saved baseline binary exists. The optimization before/after comparison is retained in [OPTIMIZATION.md](OPTIMIZATION.md) and [optimization.json](optimization.json).
 

@@ -18,9 +18,9 @@ ROOT = Path(__file__).resolve().parent.parent
 BENCH = ROOT / 'benchmarks'
 NIO = ROOT / 'target/release/nio-js'
 BEFORE = BENCH / '.tools/nio-before'
-BUN = BENCH / '.tools/bun-darwin-aarch64/bun'
-DENO_BIN = Path.home() / '.deno/bin/deno'
-DENO = str(DENO_BIN) if DENO_BIN.exists() else 'deno'
+BUN = BENCH / '.tools/bun-linux-x64/bun'
+DENO = BENCH / '.tools/deno-linux-x64'
+DENO = str(DENO) if DENO.exists() else 'deno'
 LOAD = BENCH / 'loadgen/target/release/nio-bench-loadgen'
 CAPSULE = BENCH / 'app.njs'
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -115,10 +115,12 @@ def main(include_baseline=True):
     except Exception:
         pass
     data = {'date_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'machine': {
-        'os': command('sw_vers', '-productVersion'), 'architecture': platform.machine(),
-        'cpu': command('sysctl', '-n', 'machdep.cpu.brand_string'),
-        'logical_cpus': int(command('sysctl', '-n', 'hw.ncpu')),
-        'ram_gib': int(command('sysctl', '-n', 'hw.memsize')) / 1024**3,
+        'os': command('sw_vers', '-productVersion') if command('uname', '-s').startswith('Darwin') else command('uname', '-o') + ' ' + command('uname', '-r'), 'architecture': platform.machine(),
+        'cpu': command('sysctl', '-n', 'machdep.cpu.brand_string') if command('uname', '-s').startswith('Darwin') else ' '.join(
+            line.split(':', 1)[1].strip() for line in command('cat', '/proc/cpuinfo').splitlines()
+            if line.strip().startswith('model name')),
+        'logical_cpus': int(command('sysctl', '-n', 'hw.ncpu')) if command('uname', '-s').startswith('Darwin') else int(command('nproc')),
+        'ram_gib': int(command('sysctl', '-n', 'hw.memsize')) / 1024**3 if command('uname', '-s').startswith('Darwin') else int(command('cat', '/proc/meminfo').split('\n')[0].split(':')[1].strip().split()[0]) / 1024,
     }, 'versions': versions,
     'binary_sha256': {'nio': hashlib.sha256(NIO.read_bytes()).hexdigest(), 'bun': hashlib.sha256(BUN.read_bytes()).hexdigest()},
     'startup': {}, 'http': [], 'config': {'rounds': 3, 'warmup_seconds': 1, 'measurement_seconds': 2, 'concurrency': [1, 8], 'cpu_iterations': 100000}}

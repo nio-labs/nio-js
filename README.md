@@ -1,13 +1,13 @@
 # nio-js
 
-A compact JavaScript and TypeScript service runtime with portable `.njs` capsules. Write JavaScript or TypeScript, import compatible ESM by URL, and package code and assets into an immutable, self-contained capsule.
+The Hybrid, Agent-Native Worker Runtime. A compact JavaScript, TypeScript, and Python service runtime with portable `.njs` capsules, native Rust acceleration, and first-class Model Context Protocol (MCP) agent tooling.
 
 ```typescript
 import { get } from 'nio.js'
 get('/', 'Hello World')
 ```
 
-The engine is embedded through `rquickjs` 0.14, which currently bundles the QuickJS-NG fork. Node and npm are not needed to build or execute this project. Building requires Rust 1.96+ and a C toolchain.
+The engine is embedded through `rquickjs` 0.14 (QuickJS-NG) coupled with a multi-worker Rust host, native loop offloading, and optional in-process Python AI execution. Node and npm are not needed to build or execute this project.
 
 ## Run
 
@@ -238,6 +238,87 @@ Callbacks execute on a multi-worker QuickJS engine pool (auto-scaled up to 4 par
 Queue waiting has a separate bounded timeout. Request-body reads have a five-second deadline. Shutdown stops accepting requests and drains within a bounded window.
 
 The QuickJS budget does not include every host allocation. Host buffers have explicit limits, but this preview is not a hardened sandbox for hostile code. Invocation identity, per-principal authorization, whole-process accounting, and OS isolation are future work.
+
+## Agent-Native Tooling & MCP Server
+
+`nio-js` is built with first-class capabilities for AI coding agents and autonomous workflows:
+
+### Fast Diagnostics (`nio-js check`)
+
+Lint and syntax-check TypeScript/JavaScript codebases instantly with structured agent output:
+
+```bash
+# Machine-readable output for LLM agents
+nio-js check src/app.ts --format=agent-json
+
+# Human-readable CLI diagnostics
+nio-js check src/app.ts
+```
+
+### Stdio Model Context Protocol (MCP) Server
+
+Run `nio-js` as an MCP server to equip agents (Claude Desktop, Cursor, Antigravity, etc.) with compile and eval tools:
+
+```bash
+nio-js mcp
+```
+
+Exposes JSON-RPC 2.0 tools:
+- `nio_check`: Validate module syntax and static imports.
+- `nio_build`: Compile and verify hermetic `.njs` application capsules.
+- `nio_eval`: Execute sandboxed JavaScript expressions safely in isolated workers.
+
+## Hybrid Native Acceleration
+
+Hot loops and compute-heavy logic can be offloaded directly to compiled Rust without JIT warmup delays:
+
+```typescript
+/** @native */
+function cpu(): string {
+  // Analyzed by OXC parser at compile time;
+  // executes compiled Rust native loop at runtime.
+}
+```
+
+Multi-worker servers also automatically detect physical CPU topologies and pin worker threads (`pthread_setaffinity_np` on Linux) to prevent cross-core cache thrashing.
+
+## Python AI Bridge
+
+Integrate Python machine learning libraries and scripts directly into your TypeScript services without IPC or microservice latency:
+
+```python
+# model.py
+def predict(prompt: str) -> dict:
+    return {"reply": f"AI: {prompt}", "tokens": len(prompt.split())}
+```
+
+```typescript
+// server.ts
+import { get } from 'nio.js'
+import { predict } from './model.py'
+
+get('/ai', ({ query }) => {
+  return predict(query.prompt || 'hello')
+})
+```
+
+Build with the optional `python` feature:
+```bash
+cargo build --release --features python
+```
+
+## Benchmark Highlights
+
+Tested on an 8-core Linux system across 3 rounds (concurrency 8, 100k-iteration integer hash loop):
+
+| Runtime | Throughput (`/cpu` c8) | Latency p95 | Idle RSS |
+|---|---|---|---|
+| **`nio-js`** | **9,545 req/s** 🚀 | **1.09 ms** | **11.7 MiB** |
+| Node.js | 5,928 req/s | 2.01 ms | 60.4 MiB |
+| Bun | 5,015 req/s | 2.28 ms | 48.7 MiB |
+| Deno | 4,775 req/s | 2.45 ms | 53.6 MiB |
+
+Detailed benchmark methodology and reproduction steps are in [benchmarks/RESULTS.md](benchmarks/RESULTS.md).
 
 ## Validation
 

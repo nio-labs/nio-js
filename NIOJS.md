@@ -1,21 +1,21 @@
 # nio-js
 
-A compact JavaScript/TypeScript runtime for small services, using QuickJS and a Rust host.
+The Hybrid, Agent-Native Worker Runtime using QuickJS, a multi-worker Rust host, native Rust offloading, and in-process Python AI.
 
-**Write simple handlers. Import dependencies by URL. Package a verified application into one `.njs` capsule.**
+**Write simple handlers. Import dependencies by URL. Offload compute to Rust & Python. Package a verified application into one `.njs` capsule.**
 
-Status: design specification with an initial implementation documented in [README.md](README.md). That README documents working commands, tested behavior, and preview limitations. Features below remain design targets unless listed as implemented there.
+Status: design specification with full multi-worker server, agent tooling (MCP server, agent-json checks), native function acceleration, and modular Python AI execution documented in [README.md](README.md) and [HYBRID_ENGINE.md](HYBRID_ENGINE.md).
 
 ## Product direction
 
-nio-js makes small services easy to write, inspect, and deploy. Its identity is a simple native application API, verified dependency packaging, and controlled execution.
+nio-js makes small services easy to write, inspect, deploy, and execute by autonomous AI agents. Its identity is a simple native application API, verified dependency packaging, multi-core worker pinning, and hybrid polyglot execution.
 
 - Project and CLI: `nio-js`.
 - Built-in application module: `'nio.js'`.
-- Source: `.js` and `.ts`.
+- Source: `.js`, `.ts`, and `.py`.
 - Application capsule: `.njs`.
 - Dependency lockfile: `nio.lock`.
-- Engine: QuickJS embedded in a Rust host.
+- Engine: QuickJS embedded in a multi-worker Rust host with optional PyO3 CPython bridge.
 
 There is no npm installation step or project-local `node_modules`. Initial dependency preparation may use the network; a prepared capsule executes without fetching dependencies. Application network operations remain subject to host permissions.
 

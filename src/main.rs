@@ -1,6 +1,8 @@
 mod engine;
+mod mcp;
 mod network;
 mod prepare;
+pub mod python;
 mod server;
 
 use anyhow::{Context, Result, ensure};
@@ -52,7 +54,17 @@ enum Command {
         preparation: Preparation,
         #[arg(long, value_delimiter = ',')]
         require_net: Vec<String>,
+        #[arg(long, default_value = "text")]
+        format: String,
     },
+    Check {
+        file: PathBuf,
+        #[command(flatten)]
+        preparation: Preparation,
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+    Mcp,
     Inspect {
         file: PathBuf,
     },
@@ -120,6 +132,7 @@ fn main_result() -> Result<()> {
             output,
             preparation,
             require_net,
+            format,
         } => {
             ensure!(
                 output.extension().is_some_and(|s| s == "njs"),
@@ -127,7 +140,72 @@ fn main_result() -> Result<()> {
             );
             let c = prepare::prepare(&file, &preparation.options(require_net)?)?;
             prepare::atomic_write(&output, &serde_json::to_vec_pretty(&c)?)?;
-            eprintln!("Built {} ({} modules)", output.display(), c.modules.len());
+            if format == "agent-json" {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "status": "ok",
+                        "output": output.display().to_string(),
+                        "modules_count": c.modules.len(),
+                        "entry": c.entry
+                    }))?
+                );
+            } else {
+                eprintln!("Built {} ({} modules)", output.display(), c.modules.len());
+            }
+        }
+        Command::Check {
+            file,
+            preparation,
+            format,
+        } => {
+            let options = preparation.options(vec![])?;
+            match prepare::prepare(&file, &options) {
+                Ok(capsule) => {
+                    if format == "agent-json" {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&serde_json::json!({
+                                "status": "ok",
+                                "file": file.display().to_string(),
+                                "entry": capsule.entry,
+                                "modules_count": capsule.modules.len(),
+                                "network": capsule.network,
+                                "diagnostics": []
+                            }))?
+                        );
+                    } else {
+                        println!(
+                            "✓ Verified {} ({} modules, valid)",
+                            file.display(),
+                            capsule.modules.len()
+                        );
+                    }
+                }
+                Err(e) => {
+                    if format == "agent-json" {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&serde_json::json!({
+                                "status": "error",
+                                "file": file.display().to_string(),
+                                "message": e.to_string(),
+                                "diagnostics": [{
+                                    "file": file.display().to_string(),
+                                    "message": e.to_string(),
+                                    "severity": "error"
+                                }]
+                            }))?
+                        );
+                        std::process::exit(1);
+                    } else {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+        Command::Mcp => {
+            mcp::run_mcp_server()?;
         }
         Command::Inspect { file } => {
             let c = prepare::read_capsule(&file)?;
@@ -185,9 +263,7 @@ fn main_result() -> Result<()> {
             let worker_count = if workers > 0 {
                 workers
             } else {
-                std::thread::available_parallelism()
-                    .map(|n| n.get())
-                    .unwrap_or(2)
+                detect_physical_cores()
             };
             let tokio_workers = worker_count.clamp(2, 4);
             let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -205,4 +281,34 @@ fn main_result() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn detect_physical_cores() -> usize {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(entries) = std::fs::read_dir("/sys/devices/system/cpu") {
+            let mut unique_cores = std::collections::HashSet::new();
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let s = name.to_string_lossy();
+                if s.starts_with("cpu") && s[3..].chars().all(|c| c.is_ascii_digit()) {
+                    let core_id_path = entry.path().join("topology/core_id");
+                    let pkg_id_path = entry.path().join("topology/physical_package_id");
+                    if let (Ok(core_id), Ok(pkg_id)) = (
+                        std::fs::read_to_string(&core_id_path),
+                        std::fs::read_to_string(&pkg_id_path),
+                    ) {
+                        unique_cores
+                            .insert((pkg_id.trim().to_string(), core_id.trim().to_string()));
+                    }
+                }
+            }
+            if !unique_cores.is_empty() {
+                return unique_cores.len();
+            }
+        }
+    }
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(2)
 }

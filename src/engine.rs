@@ -224,6 +224,38 @@ impl Engine {
                 let asset=assets.get(&name).ok_or(rquickjs::Error::Unknown)?;
                 serde_json::to_string(asset).map_err(|_|rquickjs::Error::Unknown)
             })?)?;
+            globals.set("__nioNative", Function::new(ctx.clone(), move |name: String| -> rquickjs::Result<String> {
+                match name.as_str() {
+                    "cpu" => {
+                        let mut value: i32 = 42;
+                        for _ in 0..100_000 {
+                            value = value.wrapping_mul(1664525).wrapping_add(1013904223);
+                        }
+                        Ok((value as u32).to_string())
+                    }
+                    _ => Err(rquickjs::Error::Unknown),
+                }
+            })?)?;
+            globals.set(
+                "__nioPython",
+                Function::new(
+                    ctx.clone(),
+                    move |module: String, func: String, payload: String| -> rquickjs::Result<String> {
+                        crate::python::call_python_fn(&module, &func, &payload)
+                            .map_err(|e| rquickjs::Error::new_loading_message(format!("{module}.{func}"), e.to_string()))
+                    },
+                )?,
+            )?;
+            globals.set(
+                "__nioPythonEval",
+                Function::new(
+                    ctx.clone(),
+                    move |code: String| -> rquickjs::Result<String> {
+                        crate::python::eval_python(&code)
+                            .map_err(|e| rquickjs::Error::new_loading_message("python.eval", e.to_string()))
+                    },
+                )?,
+            )?;
             globals.set("__nioLog", Function::new(ctx.clone(),|s:String| { eprintln!("{s}"); })?)?;
             globals.set("__nioEncode", Function::new(ctx.clone(),|s:String|s.into_bytes())?)?;
             globals.set("__nioDecode", Function::new(ctx.clone(),|b:Vec<u8>|String::from_utf8_lossy(&b).into_owned())?)?;
@@ -554,6 +586,28 @@ mod tests {
         assert!(e.dispatch(0, input()).is_err());
         let (_dir, mut e) = fixture("import {get} from 'nio.js'; get('/',()=>undefined)", 1000)?;
         assert!(e.dispatch(0, input()).is_err());
+        Ok(())
+    }
+    #[test]
+    fn native_cpu_execution() -> Result<()> {
+        let (_dir, mut e) = fixture(
+            "import {get,native} from 'nio.js'; const cpu = native('cpu'); get('/cpu', () => cpu());",
+            1000,
+        )?;
+        let r = e.dispatch(0, input())?;
+        assert_eq!(text(r), "289420874");
+        Ok(())
+    }
+    #[test]
+    #[cfg(feature = "python")]
+    fn python_invocation_from_javascript() -> Result<()> {
+        crate::python::init_python();
+        let (_dir, mut e) = fixture(
+            "import {get,pythonEval} from 'nio.js'; get('/py', () => pythonEval('100 + 23'));",
+            1000,
+        )?;
+        let r = e.dispatch(0, input())?;
+        assert_eq!(text(r), "123");
         Ok(())
     }
 }

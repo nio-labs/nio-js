@@ -116,17 +116,56 @@ impl<'a> Visit<'a> for Imports {
         walk::walk_import_expression(self, d);
     }
 }
-fn compile(name: &str, source: &str) -> Result<(String, Vec<String>, String)> {
+
+fn detect_native_functions(program: &Program, source: &str) -> Vec<(String, usize, usize)> {
+    if !source.contains("@native") {
+        return Vec::new();
+    }
+    let mut results = Vec::new();
+    for stmt in &program.body {
+        let (func, decl_start) = match stmt {
+            Statement::ExportDeclaration(decl) => {
+                if let Declaration::FunctionDeclaration(f) = &decl.declaration {
+                    (Some(&**f), decl.span.start as usize)
+                } else {
+                    (None, 0)
+                }
+            }
+            Statement::FunctionDeclaration(f) => (Some(&**f), f.span.start as usize),
+            _ => (None, 0),
+        };
+        if let Some(oxc_ast::ast::Function {
+            id: Some(id),
+            body: Some(body),
+            span,
+            ..
+        }) = func
+        {
+            let func_start = span.start as usize;
+            let check_start = decl_start.min(func_start).saturating_sub(150);
+            let check_end = func_start.min(source.len());
+            if check_start < check_end && source[check_start..check_end].contains("@native") {
+                results.push((
+                    id.name.to_string(),
+                    body.span.start as usize,
+                    body.span.end as usize,
+                ));
+            }
+        }
+    }
+    results
+}
+
+fn compile_inner(
+    name: &str,
+    source: &str,
+    ty: SourceType,
+) -> Result<(String, Vec<String>, String)> {
     let allocator = Allocator::default();
     let path = Url::parse(name)
         .ok()
         .map(|u| u.path().to_owned())
         .unwrap_or_else(|| name.into());
-    let ty = if path.ends_with(".ts") {
-        SourceType::ts()
-    } else {
-        SourceType::mjs()
-    };
     let parsed = Parser::new(&allocator, source, ty).parse();
     ensure!(
         parsed.diagnostics.is_empty(),
@@ -167,6 +206,58 @@ fn compile(name: &str, source: &str) -> Result<(String, Vec<String>, String)> {
         .context("source map missing")?
         .to_json_string();
     Ok((generated.code, imports.values, map))
+}
+
+fn compile(name: &str, source: &str) -> Result<(String, Vec<String>, String)> {
+    let path = Url::parse(name)
+        .ok()
+        .map(|u| u.path().to_owned())
+        .unwrap_or_else(|| name.into());
+    if path.ends_with(".py") {
+        let mut js_wrapper = String::from("import { python } from 'nio.js';\n");
+        let escaped_code = serde_json::to_string(source)?;
+        js_wrapper.push_str(&format!("const __pyCode = {escaped_code};\n"));
+        for line in source.lines() {
+            let trimmed = line.trim_start();
+            if let Some(rest) = trimmed.strip_prefix("def ") {
+                let fn_name = rest.split('(').next().map(|s| s.trim()).unwrap_or("");
+                if !fn_name.is_empty() && fn_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                    js_wrapper.push_str(&format!(
+                        "export const {fn_name} = python(__pyCode, '{fn_name}');\n"
+                    ));
+                }
+            }
+        }
+        js_wrapper.push_str("export default new Proxy({}, { get(_, prop) { return python(__pyCode, String(prop)); } });\n");
+        return compile_inner(name, &js_wrapper, SourceType::mjs());
+    }
+    let ty = if path.ends_with(".ts") {
+        SourceType::ts()
+    } else {
+        SourceType::mjs()
+    };
+    if source.contains("@native") {
+        let allocator = Allocator::default();
+        let parsed = Parser::new(&allocator, source, ty).parse();
+        if parsed.diagnostics.is_empty() {
+            let native_fns = detect_native_functions(&parsed.program, source);
+            if !native_fns.is_empty() {
+                let mut transformed = source.to_string();
+                let mut sorted = native_fns;
+                sorted.sort_by_key(|a| std::cmp::Reverse(a.1));
+                for (name, start, end) in sorted {
+                    if start < end && end <= transformed.len() {
+                        transformed.replace_range(
+                            start..end,
+                            &format!("{{\n  return __nioNative(\"{name}\");\n}}"),
+                        );
+                    }
+                }
+                return compile_inner(name, &transformed, ty);
+            }
+        }
+    }
+    compile_inner(name, source, ty)
 }
 fn resolve(base: &str, spec: &str, mappings: &BTreeMap<String, String>) -> Result<String> {
     if spec == "nio.js" {
@@ -608,5 +699,12 @@ mod tests {
                 .unwrap()
                 .ends_with("/y.js")
         );
+    }
+    #[test]
+    fn native_directive_transforms_function() -> Result<()> {
+        let code = "/** @native */\nexport function cpu() {\n  let x = 1;\n  for (let i = 0; i < 100; i++) x += i;\n  return x;\n}\n";
+        let (compiled, _, _) = compile("workload.js", code)?;
+        assert!(compiled.contains("__nioNative(\"cpu\")"));
+        Ok(())
     }
 }
