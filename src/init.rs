@@ -46,9 +46,9 @@ fn init_monorepo(
     };
 
     let frameworks = if kind == "web" {
-        vec!["Vanilla (Zero-build)", "Lit", "React", "Vue", "Eleventy"]
+        vec!["Blank", "Vanilla (Zero-build)", "Lit", "React", "Vue", "Eleventy"]
     } else {
-        vec!["Vue", "React", "Svelte", "Vanilla"]
+        vec!["Blank", "Vue", "React", "Svelte", "Vanilla"]
     };
 
     let selected_fw = match fw_opt {
@@ -115,27 +115,93 @@ get("/", () => reply("Hello from NioJS Backend!"));
         fs::write(format!("{}/ai/prompts.txt", name), "You are a helpful NioAI assistant.\n")?;
     }
 
-    // Generate Frontend Folder (web or app) using create-vite
+    // Generate Frontend Folder (web or app)
     let frontend_dir = format!("{}/{}", name, kind);
-    let template = match selected_fw.as_str() {
-        "Vue" => "vue",
-        "React" => "react",
-        "Svelte" => "svelte",
-        "Lit" => "lit",
-        _ => "vanilla",
-    };
+    
+    if selected_fw == "Blank" {
+        println!("Generating Blank template...");
+        fs::create_dir_all(&frontend_dir)?;
+        fs::create_dir_all(format!("{}/src", frontend_dir))?;
+        
+        let package_json = r#"{
+  "name": "nio-js-blank",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}"#;
+        fs::write(format!("{}/package.json", frontend_dir), package_json)?;
+        
+        let index_html = r#"<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NioJS App</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <img src="/src/logo.svg" alt="NioJS Logo" class="logo" />
+      <h1>Welcome to NioJS</h1>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>"#;
+        fs::write(format!("{}/index.html", frontend_dir), index_html)?;
+        
+        let main_js = "console.log('NioJS App Started!');\n";
+        fs::write(format!("{}/src/main.js", frontend_dir), main_js)?;
+        
+        let style_css = r#"body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  padding: 2rem;
+}
+#app {
+  /* No center in vertical */
+  text-align: center;
+}
+.logo {
+  height: 150px;
+  width: auto;
+  margin-bottom: 1rem;
+}"#;
+        fs::write(format!("{}/src/style.css", frontend_dir), style_css)?;
+        
+        // Use our actual logo
+        let logo_content = r##"<svg width="2042" height="2042" viewBox="0 0 2042 2042" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="2042" height="2042" rx="460" fill="#008080"/>
+<rect x="1262" y="1120" width="450" height="450" rx="225" fill="white"/>
+</svg>"##;
+        fs::write(format!("{}/src/logo.svg", frontend_dir), logo_content)?;
+    } else {
+        let template = match selected_fw.as_str() {
+            "Vue" => "vue",
+            "React" => "react",
+            "Svelte" => "svelte",
+            "Lit" => "lit",
+            _ => "vanilla",
+        };
 
-    println!("Generating {} template using Vite...", selected_fw);
-    let status = std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npx" })
-        .args(if cfg!(target_os = "windows") {
-            vec!["/C", "npx", "-y", "create-vite@latest", &frontend_dir, "--template", template]
-        } else {
-            vec!["-y", "create-vite@latest", &frontend_dir, "--template", template]
-        })
-        .status()?;
+        println!("Generating {} template using Vite...", selected_fw);
+        let status = std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npx" })
+            .args(if cfg!(target_os = "windows") {
+                vec!["/C", "npx", "-y", "create-vite@latest", &frontend_dir, "--template", template]
+            } else {
+                vec!["-y", "create-vite@latest", &frontend_dir, "--template", template]
+            })
+            .status()?;
 
-    if !status.success() {
-        anyhow::bail!("Failed to generate template using create-vite");
+        if !status.success() {
+            anyhow::bail!("Failed to generate template using create-vite");
+        }
     }
 
     if kind == "app" {
