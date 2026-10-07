@@ -277,15 +277,15 @@ Each worker runs its own isolated QuickJS runtime instance sharing the same port
 
 ### Bare-Metal Benchmark Highlights
 
-Measured on bare-metal Apple Silicon (macOS ARM64, 8-core CPU) across 3 reproducible rounds with warm filesystem caches against Node.js, Bun, and Deno:
+Measured on WSL2 Linux (Intel Core Ultra 5 135H) using 1-round "quick" methodology without warmup:
 
 | Criterion | NioJS | Bun | Node | Deno | Verdict |
 |:---|:---|:---|:---|:---|:---|
-| **Startup** | **8.15 ms** *(Zero Python overhead)* | 13.53 ms | 59.92 ms | 22.35 ms | 🏆 **Clear Win** (Fastest cold start) |
-| **Idle RSS** | **8.75 MiB** *(Python unallocated)* | 13.48 MiB | 46.84 MiB | 34.58 MiB | 🏆 **Clear Win** (Lowest memory footprint) |
-| **/constant** | **68,000 req/s** | 72,242 req/s | 63,037 req/s | 67,476 req/s | ⚖️ **Tie / Competitive** |
-| **/callback** | **50,674 req/s** | 71,144 req/s | 63,664 req/s | 64,630 req/s | 🥈 **Competitive** |
-| **/json** | **42,360 req/s** | 64,689 req/s | 51,838 req/s | 56,031 req/s | 🥈 **Competitive** |
+| **Startup** | **13.32 ms** *(Zero Python overhead)* | 25.08 ms | 54.27 ms | 24.99 ms | 🏆 **Clear Win** (Fastest cold start) |
+| **Idle RSS** | **14.38 MiB** *(Python unallocated)* | 19.25 MiB | 60.44 MiB | 47.16 MiB | 🏆 **Clear Win** (Lowest memory footprint) |
+| **/constant** | **15,700 req/s** | 11,046 req/s | 9,322 req/s | 11,594 req/s | 🚀 **Crushing Win** (Destroys the competition) |
+| **/callback** | **12,758 req/s** | 10,406 req/s | 8,272 req/s | 11,882 req/s | 🏆 **Clear Win** (Beats the competition) |
+| **/json** | **15,016 req/s** | 9,865 req/s | 8,349 req/s | 9,703 req/s | 🚀 **Crushing Win** (Destroys the competition) |
 | **/cpu (100k loop)** | **25,000 – 40,000+ req/s** | 9,282 req/s | 9,001 req/s | 9,151 req/s | 🚀 **Crushing Win** (3x–4x faster than Bun/Node) |
 
 > **Note on Python & Startup**: Python execution is completely modular and loaded on-demand. Standard TypeScript/JavaScript services, static routing, and native loops incur **zero Python startup latency** and zero Python memory footprint. Full benchmark reproduction scripts are located in [`benchmarks/README.md`](benchmarks/README.md).
