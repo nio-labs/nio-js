@@ -136,6 +136,12 @@
   - Kernel-offloaded static file serving (`route.static('/public')`) backed by Tokio `fs` and byte streaming.
 - [ ] **Single-File Bundling & Compression:**
   - Enhanced `.njs` capsule bundler with embedded bytecode caching and asset packing.
+- [ ] **Interactive Ecosystem Scaffolding (`nio-js init`):**
+  - **`nio-js init web`**: Generates a full-stack Nio ecosystem monorepo. Interactive prompts for:
+    - Frontend: Vanilla JS (zero-build), Lit, React, Vue, Eleventy.
+    - Database: `nio-db` or None.
+    - Intelligence: NioAI (Python tools/agents) or None.
+  - **`nio-js init app`**: Cross-platform mobile generation using Vue + Capacitor + NioJS backend API.
 
 ---
 
@@ -188,6 +194,6 @@
 | **v0.4.0** | `nio-db` Storage Tier | Native `db` client, reactive SSE mutation listener, in-memory query cache |
 | **v0.5.0** | `nio` Agent & Event Bus | Event workers (`on()`), dual MCP + `nio` tool registry (`tool()`), unified sandbox |
 | **v0.6.0** | Resilience & DevEx | Zero-downtime hot reload, worker resource limits, memory boundaries |
-| **v0.7.0** | Packaging & Static Assets | Static asset serving, compiled `.njs` bytecode cache, optimized capsule distribution |
+| **v0.7.0** | Packaging, Static Assets & Scaffolding | Static asset serving, compiled `.njs` bytecode cache, optimized capsule distribution, nio-js init scaffolding |
 | **v0.8.0** | WebAssembly & Polyglot Engine | Wasm runtime core, WASI support, safe execution for C/C++/Rust/Go capsules |
 | **v1.0.0** | **General Availability (GA)** | Frozen Capsule v1.0 spec, cross-ecosystem test suite, production deployment presets |
