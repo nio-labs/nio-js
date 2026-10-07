@@ -4,6 +4,8 @@ mod network;
 mod prepare;
 pub mod python;
 mod server;
+mod task;
+mod init;
 
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand};
@@ -25,6 +27,13 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Command {
+    Task {
+        name: String,
+    },
+    Init {
+        #[arg(default_value = "web")]
+        kind: String,
+    },
     Run {
         file: PathBuf,
         #[arg(long, default_value = "3000")]
@@ -127,6 +136,12 @@ fn main() {
 }
 fn main_result() -> Result<()> {
     match Cli::parse().command {
+        Command::Task { name } => {
+            task::run_task(&name)?;
+        }
+        Command::Init { kind } => {
+            init::init_project(&kind)?;
+        }
         Command::Build {
             file,
             output,
