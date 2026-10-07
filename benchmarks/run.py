@@ -45,7 +45,7 @@ def start(runtime):
     port = free_port()
     if runtime.startswith('nio'):
         entry = BENCH / 'nio.js' if runtime == 'nio-source' else CAPSULE
-        args = [str(BEFORE if runtime == 'nio-before' else NIO), 'run', str(entry), '--host', '127.0.0.1', '--port', str(port), '--workers', '16']
+        args = [str(BEFORE if runtime == 'nio-before' else NIO), 'run', str(entry), '--host', '127.0.0.1', '--port', str(port)]
     elif runtime == 'deno':
         args = [DENO, 'run', '--quiet', '--allow-net', '--allow-env', str(BENCH / 'deno.mjs')]
     else:

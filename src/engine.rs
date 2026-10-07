@@ -64,9 +64,9 @@ impl<'js> FromJs<'js> for Reply {
                 let s = String::from_js(ctx, raw)?;
                 if let Some(json_body) = s.strip_prefix("\0J") {
                     fast_type = 2;
-                    Bytes::copy_from_slice(json_body.as_bytes())
+                    Bytes::from(s.clone()).slice(2..)
                 } else {
-                    Bytes::from(s.into_bytes())
+                    Bytes::from(s)
                 }
             } else {
                 let array = TypedArray::<u8>::from_js(ctx, raw)?;
