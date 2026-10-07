@@ -207,6 +207,12 @@ CMD ["nio-js", "task", "start"]
 "#;
     fs::write(format!("{}/Dockerfile", name), dockerfile)?;
 
-    println!("Monorepo project initialized successfully in ./{}", name);
+    println!("\n✨ Monorepo project '{}' initialized successfully!\n", name);
+    println!("Next steps:");
+    println!("  cd {}", name);
+    if !final_deps.is_empty() || !final_dev_deps.is_empty() {
+        println!("  cd {} && npm install && cd ..", kind);
+    }
+    println!("  nio-js task serve\n");
     Ok(())
 }

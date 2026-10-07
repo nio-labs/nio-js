@@ -22,8 +22,12 @@ pub fn run_task(name: &str) -> Result<()> {
     let tasks = config.tasks.unwrap_or_default();
     let script = tasks.get(name).with_context(|| format!("Task '{}' not found in nio.toml", name))?;
 
-    if Path::new("package.json").exists() && !Path::new("node_modules").exists() {
-        bail!("node_modules not found. Please run 'npm install' before running tasks.");
+    for dir in &[".", "web", "app"] {
+        let pkg_json = Path::new(dir).join("package.json");
+        let node_mods = Path::new(dir).join("node_modules");
+        if pkg_json.exists() && !node_mods.exists() {
+            bail!("node_modules not found in '{}'. Please run 'cd {} && npm install' before running tasks.", dir, dir);
+        }
     }
 
     println!("> nio-js task {}", name);
