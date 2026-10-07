@@ -4,22 +4,27 @@ use std::fs;
 
 pub fn init_project(kind: &str) -> Result<()> {
     match kind {
-        "web" => init_web()?,
-        "app" => init_app()?,
+        "web" => init_monorepo("web")?,
+        "app" => init_monorepo("app")?,
         _ => anyhow::bail!("Unknown project type '{}'. Use 'web' or 'app'.", kind),
     }
     Ok(())
 }
 
-fn init_web() -> Result<()> {
+fn init_monorepo(kind: &str) -> Result<()> {
     let name: String = Input::with_theme(&ColorfulTheme::default())
         .with_prompt("Project name")
-        .default("my-web-app".into())
+        .default(if kind == "web" { "my-web-app".into() } else { "my-mobile-app".into() })
         .interact_text()?;
 
-    let frameworks = &["Vanilla (Zero-build)", "Lit", "React", "Vue", "Eleventy"];
+    let frameworks = if kind == "web" {
+        vec!["Vanilla (Zero-build)", "Lit", "React", "Vue", "Eleventy"]
+    } else {
+        vec!["Vue", "React", "Svelte", "Vanilla"]
+    };
+
     let fw_selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Choose a Web Framework")
+        .with_prompt(if kind == "web" { "Choose a Web Framework" } else { "Choose a Framework for Capacitor" })
         .default(0)
         .items(&frameworks[..])
         .interact()?;
@@ -41,80 +46,41 @@ fn init_web() -> Result<()> {
         .interact()?;
     let selected_ai = ai_options[ai_selection];
 
-    println!("Initializing web project '{}' with {}, DB: {}, AI: {}...", name, selected_fw, selected_db, selected_ai);
-    fs::create_dir_all(format!("{}/src", name))?;
-    fs::write(format!("{}/src/index.ts", name), "console.log('Hello NioJS Web!');\n")?;
-    
-    // Generate nio.toml
-    let nio_toml = r#"# NioJS Configuration File
-# This file defines native task runner scripts (replaces npm run scripts).
-# Run tasks using `nio-js task <name>` (e.g., `nio-js task dev`)
+    println!("Initializing monorepo project '{}'...", name);
+    fs::create_dir_all(&name)?;
 
-[tasks]
-dev = "nio-js run src/index.ts"
-build = "nio-js build src/index.ts -o dist/app.njs"
-start = "nio-js run dist/app.njs"
+    // Generate root nio.toml (will be updated with UI tasks later)
+    // Wait, we need to know the UI commands before generating it, so let's move this down.
+    let server_ts = r#"// NioJS Backend Entrypoint
+import { serve } from "nio-js";
+
+serve({
+  port: 3000,
+  fetch(req) {
+    return new Response("Hello from NioJS Backend!");
+  }
+});
 "#;
-    fs::write(format!("{}/nio.toml", name), nio_toml)?;
-    
-    // Generate Dockerfile
-    let dockerfile = r#"FROM ubuntu:24.04
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL https://nio.dev/install.sh | bash
-COPY . /app
-WORKDIR /app
-CMD ["nio-js", "task", "start"]
-"#;
-    fs::write(format!("{}/Dockerfile", name), dockerfile)?;
+    fs::write(format!("{}/server.ts", name), server_ts)?;
 
-    // Generate docker-compose.yml
-    let docker_compose = r#"version: '3.8'
-services:
-  web:
-    build: .
-    ports:
-      - "3000:3000"
-"#;
-    fs::write(format!("{}/docker-compose.yml", name), docker_compose)?;
+    // Generate DB Folder
+    if selected_db == "nio-db" {
+        fs::create_dir_all(format!("{}/db", name))?;
+        fs::write(format!("{}/db/schema.sql", name), "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);\n")?;
+        fs::write(format!("{}/db/setup.sh", name), "#!/bin/bash\necho 'Setting up nio-db...'\n")?;
+    }
 
-    println!("Web project initialized successfully in ./{}", name);
-    Ok(())
-}
+    // Generate AI Folder
+    if selected_ai == "NioAI" {
+        fs::create_dir_all(format!("{}/ai", name))?;
+        fs::write(format!("{}/ai/agent.py", name), "def process_prompt(prompt):\n    return f'AI Processed: {prompt}'\n")?;
+        fs::write(format!("{}/ai/prompts.txt", name), "You are a helpful NioAI assistant.\n")?;
+    }
 
-fn init_app() -> Result<()> {
-    let name: String = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt("Project name")
-        .default("my-mobile-app".into())
-        .interact_text()?;
+    // Generate Frontend Folder (web or app)
+    let frontend_dir = format!("{}/{}", name, kind);
+    fs::create_dir_all(format!("{}/src", frontend_dir))?;
 
-    let frameworks = &["Vue", "React", "Svelte", "Vanilla"];
-    let fw_selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Choose a Framework for Capacitor")
-        .default(0)
-        .items(&frameworks[..])
-        .interact()?;
-    let selected_fw = frameworks[fw_selection];
-
-    let db_options = &["nio-db", "None"];
-    let db_selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Do you need a Database?")
-        .default(0)
-        .items(&db_options[..])
-        .interact()?;
-    let selected_db = db_options[db_selection];
-
-    let ai_options = &["NioAI", "None"];
-    let ai_selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Do you need Intelligence (AI)?")
-        .default(0)
-        .items(&ai_options[..])
-        .interact()?;
-    let selected_ai = ai_options[ai_selection];
-
-    println!("Initializing app project '{}' with {} (Capacitor), DB: {}, AI: {}...", name, selected_fw, selected_db, selected_ai);
-    fs::create_dir_all(format!("{}/src", name))?;
-    fs::write(format!("{}/src/index.js", name), "console.log('Hello NioJS App!');\n")?;
-    
     let (dev_cmd, build_cmd, deps, dev_deps) = match selected_fw {
         "Vue" => (
             "npx @vue/cli-service serve",
@@ -134,7 +100,13 @@ fn init_app() -> Result<()> {
             r#""svelte": "^4.0.0""#,
             r#""vite": "^4.0.0", "@sveltejs/vite-plugin-svelte": "^2.0.0""#
         ),
-        _ => ( // Vanilla
+        "Lit" => (
+            "npx vite",
+            "npx vite build",
+            r#""lit": "^3.0.0""#,
+            r#""vite": "^4.0.0""#
+        ),
+        _ => ( // Vanilla or Eleventy
             "npx vite",
             "npx vite build",
             r#""#,
@@ -142,41 +114,60 @@ fn init_app() -> Result<()> {
         ),
     };
 
+    if kind == "app" {
+        fs::write(format!("{}/src/index.js", frontend_dir), "console.log('Hello Capacitor App!');\n")?;
+    } else {
+        fs::write(format!("{}/src/index.ts", frontend_dir), "console.log('Hello NioJS UI!');\n")?;
+    }
+
+    let mut final_deps = deps.to_string();
+    let mut final_dev_deps = dev_deps.to_string();
+
+    if kind == "app" {
+        if !final_deps.is_empty() { final_deps.push_str(", "); }
+        final_deps.push_str(r#""@capacitor/core": "latest""#);
+
+        if !final_dev_deps.is_empty() { final_dev_deps.push_str(", "); }
+        final_dev_deps.push_str(r#""@capacitor/cli": "latest""#);
+    }
+
+    let package_json = format!(r#"{{
+  "name": "{}-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {{
+    {}
+  }},
+  "devDependencies": {{
+    {}
+  }}
+}}"#, name, final_deps, final_dev_deps);
+    fs::write(format!("{}/package.json", frontend_dir), package_json)?;
+
+    // Generate root nio.toml
     let nio_toml = format!(r#"# NioJS Configuration File
 # This file defines native task runner scripts (replaces npm run scripts).
 # Run tasks using `nio-js task <name>` (e.g., `nio-js task dev`)
 
 [tasks]
-dev = "{}"
-build = "{} && npx cap copy"
-sync = "npx cap sync"
-"#, dev_cmd, build_cmd);
+dev = "nio-js run server.ts"
+build = "nio-js build server.ts -o dist/app.njs"
+start = "nio-js run dist/app.njs"
+dev_ui = "cd {} && {}"
+build_ui = "cd {} && {}"
+"#, kind, dev_cmd, kind, build_cmd);
     fs::write(format!("{}/nio.toml", name), nio_toml)?;
 
-    let package_json = format!(r#"{{
-  "name": "{}",
-  "version": "0.1.0",
-  "private": true,
-  "dependencies": {{
-    "@capacitor/core": "latest"{}
-  }},
-  "devDependencies": {{
-    "@capacitor/cli": "latest"{}
-  }}
-}}"#, name, 
-    if deps.is_empty() { String::new() } else { format!(", {}", deps) },
-    if dev_deps.is_empty() { String::new() } else { format!(", {}", dev_deps) }
-    );
-    fs::write(format!("{}/package.json", name), package_json)?;
-
-    let dockerfile = r#"FROM node:20
+    // Dockerfile at the root
+    let dockerfile = r#"FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://nio.dev/install.sh | bash
+COPY . /app
 WORKDIR /app
-COPY . .
-RUN npm install
-CMD ["nio-js", "task", "dev"]
+CMD ["nio-js", "task", "start"]
 "#;
     fs::write(format!("{}/Dockerfile", name), dockerfile)?;
 
-    println!("App project initialized successfully in ./{}", name);
+    println!("Monorepo project initialized successfully in ./{}", name);
     Ok(())
 }
