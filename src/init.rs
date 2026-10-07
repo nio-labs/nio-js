@@ -43,6 +43,7 @@ fn init_web() -> Result<()> {
 
     println!("Initializing web project '{}' with {}, DB: {}, AI: {}...", name, selected_fw, selected_db, selected_ai);
     fs::create_dir_all(format!("{}/src", name))?;
+    fs::write(format!("{}/src/index.ts", name), "console.log('Hello NioJS Web!');\n")?;
     
     // Generate nio.toml
     let nio_toml = r#"# NioJS Configuration File
@@ -112,6 +113,7 @@ fn init_app() -> Result<()> {
 
     println!("Initializing app project '{}' with {} (Capacitor), DB: {}, AI: {}...", name, selected_fw, selected_db, selected_ai);
     fs::create_dir_all(format!("{}/src", name))?;
+    fs::write(format!("{}/src/index.js", name), "console.log('Hello NioJS App!');\n")?;
     
     let (dev_cmd, build_cmd, deps, dev_deps) = match selected_fw {
         "Vue" => (

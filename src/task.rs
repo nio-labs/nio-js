@@ -22,6 +22,10 @@ pub fn run_task(name: &str) -> Result<()> {
     let tasks = config.tasks.unwrap_or_default();
     let script = tasks.get(name).with_context(|| format!("Task '{}' not found in nio.toml", name))?;
 
+    if Path::new("package.json").exists() && !Path::new("node_modules").exists() {
+        bail!("node_modules not found. Please run 'npm install' before running tasks.");
+    }
+
     println!("> nio-js task {}", name);
     
     let status = if cfg!(target_os = "windows") {
