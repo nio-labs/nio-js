@@ -282,12 +282,12 @@ Measured on macOS ARM64 using 1-round "quick" methodology without warmup:
 
 | Criterion | NioJS | Bun | Node | Deno | Verdict |
 |:---|:---|:---|:---|:---|:---|
-| **Startup** | **13.4 ms** *(Zero Python overhead)* | 11.7 ms | 63.7 ms | 20.0 ms | 🥈 **Close Second** (Competitive) |
-| **Idle RSS** | **15.2 MiB** *(Python unallocated)* | 13.4 MiB | 46.9 MiB | 34.6 MiB | 🥈 **Close Second** (Competitive) |
-| **/constant** | **72,421 req/s** | 71,444 req/s | 58,824 req/s | 67,527 req/s | 🏆 **Clear Win** |
-| **/callback** | **69,865 req/s** | 72,587 req/s | 53,487 req/s | 68,580 req/s | 🥈 **Close Second** |
-| **/json** | **70,622 req/s** | 68,286 req/s | 52,744 req/s | 61,626 req/s | 🏆 **Clear Win** |
-| **/cpu (100k loop)** | **71,566 req/s** | 9,246 req/s | 8,871 req/s | 9,153 req/s | 🚀 **Crushing Win** (Destroys the competition) |
+| **Startup** | **7.3 ms** *(Zero Python overhead)* | 12.2 ms | 55.2 ms | 18.8 ms | 🏆 **Clear Win** (Fastest cold start) |
+| **Idle RSS** | **11.6 MiB** *(Python unallocated)* | 13.3 MiB | 46.8 MiB | 34.6 MiB | 🏆 **Clear Win** (Lowest memory footprint) |
+| **/constant** | **73,279 req/s** | 71,899 req/s | 59,560 req/s | 66,294 req/s | 🏆 **Clear Win** |
+| **/callback** | **74,105 req/s** | 72,939 req/s | 63,430 req/s | 70,231 req/s | 🏆 **Clear Win** |
+| **/json** | **71,280 req/s** | 68,428 req/s | 50,888 req/s | 61,915 req/s | 🏆 **Clear Win** |
+| **/cpu (100k loop)** | **70,988 req/s** | 9,239 req/s | 8,863 req/s | 9,164 req/s | 🚀 **Crushing Win** (Destroys the competition) |
 
 > **Note on Python & Startup**: Python execution is completely modular and loaded on-demand. Standard TypeScript/JavaScript services, static routing, and native loops incur **zero Python startup latency** and zero Python memory footprint. Detailed benchmark methodology and reproduction instructions are in [`benchmarks/README.md`](benchmarks/README.md).
 
