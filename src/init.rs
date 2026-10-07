@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dialoguer::{theme::ColorfulTheme, Input, Select};
+use dialoguer::{Input, Select, theme::ColorfulTheme};
 use std::fs;
 
 pub fn init_project(
@@ -26,7 +26,10 @@ pub fn init_project(
         "web" => init_monorepo("web", name_opt, fw_opt, db_opt, ai_opt)?,
         "app" => init_monorepo("app", name_opt, fw_opt, db_opt, ai_opt)?,
         "server" => init_server(name_opt, db_opt, ai_opt)?,
-        _ => anyhow::bail!("Unknown project type '{}'. Use 'web', 'app', or 'server'.", kind),
+        _ => anyhow::bail!(
+            "Unknown project type '{}'. Use 'web', 'app', or 'server'.",
+            kind
+        ),
     }
     Ok(())
 }
@@ -42,12 +45,23 @@ fn init_monorepo(
         Some(n) => n,
         None => Input::with_theme(&ColorfulTheme::default())
             .with_prompt("Project name")
-            .default(if kind == "web" { "my-web-app".into() } else { "my-mobile-app".into() })
+            .default(if kind == "web" {
+                "my-web-app".into()
+            } else {
+                "my-mobile-app".into()
+            })
             .interact_text()?,
     };
 
     let frameworks = if kind == "web" {
-        vec!["Blank", "Vanilla (Zero-build)", "Lit", "React", "Vue", "Eleventy"]
+        vec![
+            "Blank",
+            "Vanilla (Zero-build)",
+            "Lit",
+            "React",
+            "Vue",
+            "Eleventy",
+        ]
     } else {
         vec!["Blank", "Vue", "React", "Svelte", "Vanilla"]
     };
@@ -56,14 +70,18 @@ fn init_monorepo(
         Some(fw) => fw,
         None => {
             let fw_selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt(if kind == "web" { "Choose a Web Framework" } else { "Choose a Framework for Capacitor" })
+                .with_prompt(if kind == "web" {
+                    "Choose a Web Framework"
+                } else {
+                    "Choose a Framework for Capacitor"
+                })
                 .default(0)
                 .items(&frameworks[..])
                 .interact()?;
             frameworks[fw_selection].to_string()
         }
     };
-    
+
     let db_options = &["nio-db", "None"];
     let selected_db = match db_opt {
         Some(db) => db,
@@ -105,20 +123,37 @@ get("/", () => reply("Hello from NioJS Backend!"));
     // Generate DB Folder
     if selected_db == "nio-db" {
         fs::create_dir_all(format!("{}/db", name))?;
-        fs::write(format!("{}/db/schema.sql", name), "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);\n")?;
-        fs::write(format!("{}/db/setup.sh", name), "#!/bin/bash\necho 'Setting up nio-db...'\n")?;
+        fs::write(
+            format!("{}/db/schema.sql", name),
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);\n",
+        )?;
+        fs::write(
+            format!("{}/db/setup.sh", name),
+            "#!/bin/bash\necho 'Setting up nio-db...'\n",
+        )?;
     }
 
     // Generate AI Folder
     if selected_ai == "NioAI" {
         fs::create_dir_all(format!("{}/ai", name))?;
-        fs::write(format!("{}/ai/agent.py", name), "def process_prompt(prompt):\n    return f'AI Processed: {prompt}'\n")?;
-        fs::write(format!("{}/ai/prompts.txt", name), "You are a helpful NioAI assistant.\n")?;
+        fs::write(
+            format!("{}/ai/agent.py", name),
+            "def process_prompt(prompt):\n    return f'AI Processed: {prompt}'\n",
+        )?;
+        fs::write(
+            format!("{}/ai/prompts.txt", name),
+            "You are a helpful NioAI assistant.\n",
+        )?;
     }
 
     // Generate root nio.toml early so it isn't skipped if the user cancels Vite
-    let build_cmd = if kind == "app" { "npm run build && npx cap copy" } else { "npm run build" };
-    let nio_toml = format!(r#"# NioJS Configuration File
+    let build_cmd = if kind == "app" {
+        "npm run build && npx cap copy"
+    } else {
+        "npm run build"
+    };
+    let nio_toml = format!(
+        r#"# NioJS Configuration File
 # This file defines native task runner scripts (replaces npm run scripts).
 # Run tasks using `nio-js task <name>` (e.g., `nio-js task dev`)
 
@@ -129,7 +164,9 @@ start = "nio-js run dist/app.njs"
 dev_ui = "cd {} && npm run dev"
 build_ui = "cd {} && {}"
 serve = "nio-js task dev & nio-js task dev_ui & wait"
-"#, kind, kind, build_cmd);
+"#,
+        kind, kind, build_cmd
+    );
     fs::write(format!("{}/nio.toml", name), nio_toml)?;
 
     // Dockerfile at the root early
@@ -144,12 +181,12 @@ CMD ["nio-js", "task", "start"]
 
     // Generate Frontend Folder (web or app)
     let frontend_dir = format!("{}/{}", name, kind);
-    
+
     if selected_fw == "Blank" {
         println!("Generating Blank template...");
         fs::create_dir_all(&frontend_dir)?;
         fs::create_dir_all(format!("{}/src", frontend_dir))?;
-        
+
         let package_json = r#"{
   "name": "nio-js-blank",
   "version": "1.0.0",
@@ -164,7 +201,7 @@ CMD ["nio-js", "task", "start"]
   }
 }"#;
         fs::write(format!("{}/package.json", frontend_dir), package_json)?;
-        
+
         let index_html = r#"<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -182,10 +219,10 @@ CMD ["nio-js", "task", "start"]
   </body>
 </html>"#;
         fs::write(format!("{}/index.html", frontend_dir), index_html)?;
-        
+
         let main_js = "console.log('NioJS App Started!');\n";
         fs::write(format!("{}/src/main.js", frontend_dir), main_js)?;
-        
+
         let style_css = r#"body {
   margin: 0;
   font-family: system-ui, -apple-system, sans-serif;
@@ -201,7 +238,7 @@ CMD ["nio-js", "task", "start"]
   margin-bottom: 1rem;
 }"#;
         fs::write(format!("{}/src/style.css", frontend_dir), style_css)?;
-        
+
         // Use our actual logo
         let logo_content = r##"<svg width="2042" height="2042" viewBox="0 0 2042 2042" fill="none" xmlns="http://www.w3.org/2000/svg">
 <rect width="2042" height="2042" rx="460" fill="#008080"/>
@@ -218,38 +255,105 @@ CMD ["nio-js", "task", "start"]
         };
 
         println!("Generating {} template using Vite...", selected_fw);
-        let status = std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npx" })
-            .args(if cfg!(target_os = "windows") {
-                vec!["/C", "npx", "-y", "create-vite@latest", &frontend_dir, "--template", template, "--no-interactive"]
-            } else {
-                vec!["-y", "create-vite@latest", &frontend_dir, "--template", template, "--no-interactive"]
-            })
-            .status()?;
+        let status = std::process::Command::new(if cfg!(target_os = "windows") {
+            "cmd"
+        } else {
+            "npx"
+        })
+        .args(if cfg!(target_os = "windows") {
+            vec![
+                "/C",
+                "npx",
+                "-y",
+                "create-vite@latest",
+                &frontend_dir,
+                "--template",
+                template,
+                "--no-interactive",
+            ]
+        } else {
+            vec![
+                "-y",
+                "create-vite@latest",
+                &frontend_dir,
+                "--template",
+                template,
+                "--no-interactive",
+            ]
+        })
+        .status()?;
 
         if !status.success() {
-            println!("Warning: Failed to generate template using create-vite. You may need to create the UI manually.");
+            println!(
+                "Warning: Failed to generate template using create-vite. You may need to create the UI manually."
+            );
         }
     }
 
     if kind == "app" {
         println!("Installing Capacitor...");
-        let _ = std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npm" })
-            .args(if cfg!(target_os = "windows") { vec!["/C", "npm", "install", "@capacitor/core"] } else { vec!["install", "@capacitor/core"] })
-            .current_dir(&frontend_dir)
-            .status();
-        
-        let _ = std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npm" })
-            .args(if cfg!(target_os = "windows") { vec!["/C", "npm", "install", "-D", "@capacitor/cli"] } else { vec!["install", "-D", "@capacitor/cli"] })
-            .current_dir(&frontend_dir)
-            .status();
-            
-        let _ = std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npx" })
-            .args(if cfg!(target_os = "windows") { vec!["/C", "npx", "-y", "cap", "init", &name, "com.example.app", "--web-dir", "dist"] } else { vec!["-y", "cap", "init", &name, "com.example.app", "--web-dir", "dist"] })
-            .current_dir(&frontend_dir)
-            .status();
+        let _ = std::process::Command::new(if cfg!(target_os = "windows") {
+            "cmd"
+        } else {
+            "npm"
+        })
+        .args(if cfg!(target_os = "windows") {
+            vec!["/C", "npm", "install", "@capacitor/core"]
+        } else {
+            vec!["install", "@capacitor/core"]
+        })
+        .current_dir(&frontend_dir)
+        .status();
+
+        let _ = std::process::Command::new(if cfg!(target_os = "windows") {
+            "cmd"
+        } else {
+            "npm"
+        })
+        .args(if cfg!(target_os = "windows") {
+            vec!["/C", "npm", "install", "-D", "@capacitor/cli"]
+        } else {
+            vec!["install", "-D", "@capacitor/cli"]
+        })
+        .current_dir(&frontend_dir)
+        .status();
+
+        let _ = std::process::Command::new(if cfg!(target_os = "windows") {
+            "cmd"
+        } else {
+            "npx"
+        })
+        .args(if cfg!(target_os = "windows") {
+            vec![
+                "/C",
+                "npx",
+                "-y",
+                "cap",
+                "init",
+                &name,
+                "com.example.app",
+                "--web-dir",
+                "dist",
+            ]
+        } else {
+            vec![
+                "-y",
+                "cap",
+                "init",
+                &name,
+                "com.example.app",
+                "--web-dir",
+                "dist",
+            ]
+        })
+        .current_dir(&frontend_dir)
+        .status();
     }
 
-    println!("\n✨ Monorepo project '{}' initialized successfully!\n", name);
+    println!(
+        "\n✨ Monorepo project '{}' initialized successfully!\n",
+        name
+    );
     println!("Next steps:");
     println!("  cd {}", name);
     println!("  cd {} && npm install && cd ..", kind);
@@ -308,14 +412,26 @@ get("/", () => reply("Hello from NioJS Backend!"));
 
     if selected_db == "nio-db" {
         fs::create_dir_all(format!("{}/db", name))?;
-        fs::write(format!("{}/db/schema.sql", name), "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);\n")?;
-        fs::write(format!("{}/db/setup.sh", name), "#!/bin/bash\necho 'Setting up nio-db...'\n")?;
+        fs::write(
+            format!("{}/db/schema.sql", name),
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);\n",
+        )?;
+        fs::write(
+            format!("{}/db/setup.sh", name),
+            "#!/bin/bash\necho 'Setting up nio-db...'\n",
+        )?;
     }
 
     if selected_ai == "NioAI" {
         fs::create_dir_all(format!("{}/ai", name))?;
-        fs::write(format!("{}/ai/agent.py", name), "def process_prompt(prompt):\n    return f'AI Processed: {prompt}'\n")?;
-        fs::write(format!("{}/ai/prompts.txt", name), "You are a helpful NioAI assistant.\n")?;
+        fs::write(
+            format!("{}/ai/agent.py", name),
+            "def process_prompt(prompt):\n    return f'AI Processed: {prompt}'\n",
+        )?;
+        fs::write(
+            format!("{}/ai/prompts.txt", name),
+            "You are a helpful NioAI assistant.\n",
+        )?;
     }
 
     let nio_toml = r#"# NioJS Configuration File

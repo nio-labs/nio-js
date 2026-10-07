@@ -28,7 +28,7 @@ For a specific version or install directory:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/nio-labs/nio-js/main/install.sh -o install.sh
-sh install.sh --version v0.1.0 --install-dir "$HOME/.local/bin"
+sh install.sh --version v0.2.6 --install-dir "$HOME/.local/bin"
 ```
 
 The installer detects your platform, downloads the latest stable release, verifies its SHA-256 checksum, and installs to `$HOME/.local/bin` (or `$PREFIX/bin` in Termux). It requires curl or wget and sha256sum or shasum. Linux releases require GNU libc (built on Ubuntu 22.04); musl distributions are not supported.
@@ -46,7 +46,7 @@ For a specific version or directory:
 
 ```powershell
 Invoke-WebRequest -Uri https://raw.githubusercontent.com/nio-labs/nio-js/main/install.ps1 -OutFile install.ps1
-.\install.ps1 -Version v0.1.0 -InstallDir "$env:USERPROFILE\.local\bin"
+.\install.ps1 -Version v0.2.6 -InstallDir "$env:USERPROFILE\.local\bin"
 ```
 
 ### npm

@@ -20,18 +20,24 @@ pub fn run_task(name: &str) -> Result<()> {
     let config: NioToml = toml::from_str(&toml_content).context("Failed to parse nio.toml")?;
 
     let tasks = config.tasks.unwrap_or_default();
-    let script = tasks.get(name).with_context(|| format!("Task '{}' not found in nio.toml", name))?;
+    let script = tasks
+        .get(name)
+        .with_context(|| format!("Task '{}' not found in nio.toml", name))?;
 
     for dir in &[".", "web", "app"] {
         let pkg_json = Path::new(dir).join("package.json");
         let node_mods = Path::new(dir).join("node_modules");
         if pkg_json.exists() && !node_mods.exists() {
-            bail!("node_modules not found in '{}'. Please run 'cd {} && npm install' before running tasks.", dir, dir);
+            bail!(
+                "node_modules not found in '{}'. Please run 'cd {} && npm install' before running tasks.",
+                dir,
+                dir
+            );
         }
     }
 
     println!("> nio-js task {}", name);
-    
+
     let status = if cfg!(target_os = "windows") {
         Command::new("cmd")
             .args(["/C", script])
@@ -46,7 +52,11 @@ pub fn run_task(name: &str) -> Result<()> {
     };
 
     if !status.success() {
-        bail!("Task '{}' failed with exit code: {}", name, status.code().unwrap_or(-1));
+        bail!(
+            "Task '{}' failed with exit code: {}",
+            name,
+            status.code().unwrap_or(-1)
+        );
     }
 
     Ok(())

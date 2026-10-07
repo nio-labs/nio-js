@@ -1,11 +1,11 @@
 mod engine;
+mod init;
 mod mcp;
 mod network;
 mod prepare;
 pub mod python;
 mod server;
 mod task;
-mod init;
 
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand};
@@ -146,7 +146,13 @@ fn main_result() -> Result<()> {
         Command::Task { name } => {
             task::run_task(&name)?;
         }
-        Command::Init { kind, name, framework, db, ai } => {
+        Command::Init {
+            kind,
+            name,
+            framework,
+            db,
+            ai,
+        } => {
             init::init_project(&kind, name, framework, db, ai)?;
         }
         Command::Build {

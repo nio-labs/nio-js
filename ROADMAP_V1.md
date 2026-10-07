@@ -30,7 +30,7 @@
 
 ## 🗺️ Milestone Breakdown
 
-### 🛠️ Milestone 0.5: Scaffolding & Native Task Runner (`v0.2.5`)
+### 🛠️ Milestone 0.5: Scaffolding & Native Task Runner (`v0.2.6`)
 **Theme:** Rapid ecosystem initialization and native script orchestration (No NPM).
 
 - [ ] **Interactive Ecosystem Scaffolding (`nio-js init`):**
@@ -205,8 +205,8 @@
 
 | Release | Focus | Key Deliverables |
 |---|---|---|
-| **v0.2.0** *(Current)* | Hybrid Engine & Performance | Bare-metal Rust offloading, in-process PyO3 Python AI, stdio MCP server, 68k+ req/sec |
-| **v0.2.5** | Scaffolding & Task Runner | `nio-js init`, `nio-js task`, `nio.toml`, Docker deployment |
+| **v0.2.0** | Hybrid Engine & Performance | Bare-metal Rust offloading, in-process PyO3 Python AI, stdio MCP server, 68k+ req/sec |
+| **v0.2.6** *(Current)* | Scaffolding & Task Runner | `nio-js init`, `nio-js task`, `nio.toml`, Docker deployment |
 | **v0.3.0** | Protocols & Streaming | SSE token streaming, WebSockets, W3C OpenTelemetry tracing |
 | **v0.4.0** | `nio-db` Storage Tier | Native `db` client, reactive SSE mutation listener, in-memory query cache |
 | **v0.5.0** | `nio` Agent & Event Bus | Event workers (`on()`), dual MCP + `nio` tool registry (`tool()`), unified sandbox |
