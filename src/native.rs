@@ -575,89 +575,87 @@ impl Emit<'_, '_> {
                     _ => bail!("invalid native unary operator"),
                 }
             }
-            Expr::Binary(op, a, b) => {
-                match op.as_str() {
-                    "+" => {
-                        let av = self.expr(a, depth + 1)?;
-                        let bv = self.expr(b, depth + 1)?;
-                        self.b.ins().fadd(av, bv)
-                    }
-                    "-" => {
-                        let av = self.expr(a, depth + 1)?;
-                        let bv = self.expr(b, depth + 1)?;
-                        self.b.ins().fsub(av, bv)
-                    }
-                    "*" => {
-                        let av = self.expr(a, depth + 1)?;
-                        let bv = self.expr(b, depth + 1)?;
-                        self.b.ins().fmul(av, bv)
-                    }
-                    "/" => {
-                        let av = self.expr(a, depth + 1)?;
-                        let bv = self.expr(b, depth + 1)?;
-                        self.b.ins().fdiv(av, bv)
-                    }
-                    "%" => {
-                        let av = self.expr(a, depth + 1)?;
-                        let bv = self.expr(b, depth + 1)?;
-                        let call = self.b.ins().call(self.rem, &[av, bv]);
-                        self.b.inst_results(call)[0]
-                    }
-                    "|" | "&" | "^" | "<<" | ">>" | ">>>" | "imul" => {
-                        let ai = self.expr_i32(a, depth + 1)?;
-                        let bi = self.expr_i32(b, depth + 1)?;
-                        match op.as_str() {
-                            "|" => {
-                                let r = self.b.ins().bor(ai, bi);
-                                self.b.ins().fcvt_from_sint(types::F64, r)
-                            }
-                            "&" => {
-                                let r = self.b.ins().band(ai, bi);
-                                self.b.ins().fcvt_from_sint(types::F64, r)
-                            }
-                            "^" => {
-                                let r = self.b.ins().bxor(ai, bi);
-                                self.b.ins().fcvt_from_sint(types::F64, r)
-                            }
-                            "<<" => {
-                                let shift = self.b.ins().band_imm(bi, 31);
-                                let r = self.b.ins().ishl(ai, shift);
-                                self.b.ins().fcvt_from_sint(types::F64, r)
-                            }
-                            ">>" => {
-                                let shift = self.b.ins().band_imm(bi, 31);
-                                let r = self.b.ins().sshr(ai, shift);
-                                self.b.ins().fcvt_from_sint(types::F64, r)
-                            }
-                            ">>>" => {
-                                let shift = self.b.ins().band_imm(bi, 31);
-                                let u_res = self.b.ins().ushr(ai, shift);
-                                self.b.ins().fcvt_from_uint(types::F64, u_res)
-                            }
-                            "imul" => {
-                                let r = self.b.ins().imul(ai, bi);
-                                self.b.ins().fcvt_from_sint(types::F64, r)
-                            }
-                            _ => bail!("invalid native binary operator"),
-                        }
-                    }
-                    "<" | "<=" | ">" | ">=" | "==" | "===" | "!=" | "!==" => {
-                        let av = self.expr(a, depth + 1)?;
-                        let bv = self.expr(b, depth + 1)?;
-                        let cc = match op.as_str() {
-                            "<" => FloatCC::LessThan,
-                            "<=" => FloatCC::LessThanOrEqual,
-                            ">" => FloatCC::GreaterThan,
-                            ">=" => FloatCC::GreaterThanOrEqual,
-                            "==" | "===" => FloatCC::Equal,
-                            _ => FloatCC::NotEqual,
-                        };
-                        let test = self.b.ins().fcmp(cc, av, bv);
-                        self.b.ins().fcvt_from_uint(types::F64, test)
-                    }
-                    _ => bail!("invalid native binary operator"),
+            Expr::Binary(op, a, b) => match op.as_str() {
+                "+" => {
+                    let av = self.expr(a, depth + 1)?;
+                    let bv = self.expr(b, depth + 1)?;
+                    self.b.ins().fadd(av, bv)
                 }
-            }
+                "-" => {
+                    let av = self.expr(a, depth + 1)?;
+                    let bv = self.expr(b, depth + 1)?;
+                    self.b.ins().fsub(av, bv)
+                }
+                "*" => {
+                    let av = self.expr(a, depth + 1)?;
+                    let bv = self.expr(b, depth + 1)?;
+                    self.b.ins().fmul(av, bv)
+                }
+                "/" => {
+                    let av = self.expr(a, depth + 1)?;
+                    let bv = self.expr(b, depth + 1)?;
+                    self.b.ins().fdiv(av, bv)
+                }
+                "%" => {
+                    let av = self.expr(a, depth + 1)?;
+                    let bv = self.expr(b, depth + 1)?;
+                    let call = self.b.ins().call(self.rem, &[av, bv]);
+                    self.b.inst_results(call)[0]
+                }
+                "|" | "&" | "^" | "<<" | ">>" | ">>>" | "imul" => {
+                    let ai = self.expr_i32(a, depth + 1)?;
+                    let bi = self.expr_i32(b, depth + 1)?;
+                    match op.as_str() {
+                        "|" => {
+                            let r = self.b.ins().bor(ai, bi);
+                            self.b.ins().fcvt_from_sint(types::F64, r)
+                        }
+                        "&" => {
+                            let r = self.b.ins().band(ai, bi);
+                            self.b.ins().fcvt_from_sint(types::F64, r)
+                        }
+                        "^" => {
+                            let r = self.b.ins().bxor(ai, bi);
+                            self.b.ins().fcvt_from_sint(types::F64, r)
+                        }
+                        "<<" => {
+                            let shift = self.b.ins().band_imm(bi, 31);
+                            let r = self.b.ins().ishl(ai, shift);
+                            self.b.ins().fcvt_from_sint(types::F64, r)
+                        }
+                        ">>" => {
+                            let shift = self.b.ins().band_imm(bi, 31);
+                            let r = self.b.ins().sshr(ai, shift);
+                            self.b.ins().fcvt_from_sint(types::F64, r)
+                        }
+                        ">>>" => {
+                            let shift = self.b.ins().band_imm(bi, 31);
+                            let u_res = self.b.ins().ushr(ai, shift);
+                            self.b.ins().fcvt_from_uint(types::F64, u_res)
+                        }
+                        "imul" => {
+                            let r = self.b.ins().imul(ai, bi);
+                            self.b.ins().fcvt_from_sint(types::F64, r)
+                        }
+                        _ => bail!("invalid native binary operator"),
+                    }
+                }
+                "<" | "<=" | ">" | ">=" | "==" | "===" | "!=" | "!==" => {
+                    let av = self.expr(a, depth + 1)?;
+                    let bv = self.expr(b, depth + 1)?;
+                    let cc = match op.as_str() {
+                        "<" => FloatCC::LessThan,
+                        "<=" => FloatCC::LessThanOrEqual,
+                        ">" => FloatCC::GreaterThan,
+                        ">=" => FloatCC::GreaterThanOrEqual,
+                        "==" | "===" => FloatCC::Equal,
+                        _ => FloatCC::NotEqual,
+                    };
+                    let test = self.b.ins().fcmp(cc, av, bv);
+                    self.b.ins().fcvt_from_uint(types::F64, test)
+                }
+                _ => bail!("invalid native binary operator"),
+            },
         })
     }
     fn block(&mut self, ops: &[Op], depth: usize) -> Result<bool> {
