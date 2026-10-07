@@ -150,6 +150,7 @@ build = "nio-js build server.ts -o dist/app.njs"
 start = "nio-js run dist/app.njs"
 dev_ui = "cd {} && {}"
 build_ui = "cd {} && {}"
+dev_all = "nio-js task dev & nio-js task dev_ui & wait"
 "#, kind, dev_cmd, kind, build_cmd);
     fs::write(format!("{}/nio.toml", name), nio_toml)?;
 
