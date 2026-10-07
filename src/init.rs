@@ -115,100 +115,49 @@ get("/", () => reply("Hello from NioJS Backend!"));
         fs::write(format!("{}/ai/prompts.txt", name), "You are a helpful NioAI assistant.\n")?;
     }
 
-    // Generate Frontend Folder (web or app)
+    // Generate Frontend Folder (web or app) using create-vite
     let frontend_dir = format!("{}/{}", name, kind);
-    fs::create_dir_all(format!("{}/src", frontend_dir))?;
-
-    let (dev_cmd, build_cmd, deps, dev_deps) = match selected_fw.as_str() {
-        "Vue" => (
-            "npx @vue/cli-service serve",
-            "npx @vue/cli-service build",
-            r#""vue": "^3.0.0""#,
-            r#""@vue/cli-service": "~5.0.0", "@vue/compiler-sfc": "^3.0.0""#
-        ),
-        "React" => (
-            "npx react-scripts start",
-            "npx react-scripts build",
-            r#""react": "^18.2.0", "react-dom": "^18.2.0""#,
-            r#""react-scripts": "5.0.1""#
-        ),
-        "Svelte" => (
-            "npx vite",
-            "npx vite build",
-            r#""svelte": "^4.0.0""#,
-            r#""vite": "^4.0.0", "@sveltejs/vite-plugin-svelte": "^2.0.0""#
-        ),
-        "Lit" => (
-            "npx vite",
-            "npx vite build",
-            r#""lit": "^3.0.0""#,
-            r#""vite": "^4.0.0""#
-        ),
-        _ => ( // Vanilla or Eleventy
-            "npx vite",
-            "npx vite build",
-            r#""#,
-            r#""vite": "^4.0.0""#
-        ),
+    let template = match selected_fw.as_str() {
+        "Vue" => "vue",
+        "React" => "react",
+        "Svelte" => "svelte",
+        "Lit" => "lit",
+        _ => "vanilla",
     };
 
-    if kind == "app" {
-        fs::write(format!("{}/src/index.js", frontend_dir), "console.log('Hello Capacitor App!');\n")?;
-    } else {
-        fs::write(format!("{}/src/index.ts", frontend_dir), "console.log('Hello NioJS UI!');\n")?;
+    println!("Generating {} template using Vite...", selected_fw);
+    let status = std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npx" })
+        .args(if cfg!(target_os = "windows") {
+            vec!["/C", "npx", "-y", "create-vite@latest", &frontend_dir, "--template", template]
+        } else {
+            vec!["-y", "create-vite@latest", &frontend_dir, "--template", template]
+        })
+        .status()?;
+
+    if !status.success() {
+        anyhow::bail!("Failed to generate template using create-vite");
     }
-
-    let ext = if kind == "app" { "js" } else { "ts" };
-    let html_content = format!(r#"<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NioJS App</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/index.{}"></script>
-  </body>
-</html>
-"#, ext);
-    let react_vue_html = html_content.replace(&format!(r#"<script type="module" src="/src/index.{}"></script>"#, ext), "");
-
-    match selected_fw.as_str() {
-        "Vue" | "React" => {
-            fs::create_dir_all(format!("{}/public", frontend_dir))?;
-            fs::write(format!("{}/public/index.html", frontend_dir), react_vue_html)?;
-        },
-        _ => {
-            fs::write(format!("{}/index.html", frontend_dir), html_content)?;
-        }
-    }
-
-    let mut final_deps = deps.to_string();
-    let mut final_dev_deps = dev_deps.to_string();
 
     if kind == "app" {
-        if !final_deps.is_empty() { final_deps.push_str(", "); }
-        final_deps.push_str(r#""@capacitor/core": "latest""#);
-
-        if !final_dev_deps.is_empty() { final_dev_deps.push_str(", "); }
-        final_dev_deps.push_str(r#""@capacitor/cli": "latest""#);
+        println!("Installing Capacitor...");
+        std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npm" })
+            .args(if cfg!(target_os = "windows") { vec!["/C", "npm", "install", "@capacitor/core"] } else { vec!["install", "@capacitor/core"] })
+            .current_dir(&frontend_dir)
+            .status()?;
+        
+        std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npm" })
+            .args(if cfg!(target_os = "windows") { vec!["/C", "npm", "install", "-D", "@capacitor/cli"] } else { vec!["install", "-D", "@capacitor/cli"] })
+            .current_dir(&frontend_dir)
+            .status()?;
+            
+        std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npx" })
+            .args(if cfg!(target_os = "windows") { vec!["/C", "npx", "-y", "cap", "init", &name, "com.example.app", "--web-dir", "dist"] } else { vec!["-y", "cap", "init", &name, "com.example.app", "--web-dir", "dist"] })
+            .current_dir(&frontend_dir)
+            .status()?;
     }
-
-    let package_json = format!(r#"{{
-  "name": "{}-frontend",
-  "version": "0.1.0",
-  "private": true,
-  "dependencies": {{
-    {}
-  }},
-  "devDependencies": {{
-    {}
-  }}
-}}"#, name, final_deps, final_dev_deps);
-    fs::write(format!("{}/package.json", frontend_dir), package_json)?;
 
     // Generate root nio.toml
+    let build_cmd = if kind == "app" { "npm run build && npx cap copy" } else { "npm run build" };
     let nio_toml = format!(r#"# NioJS Configuration File
 # This file defines native task runner scripts (replaces npm run scripts).
 # Run tasks using `nio-js task <name>` (e.g., `nio-js task dev`)
@@ -217,10 +166,10 @@ get("/", () => reply("Hello from NioJS Backend!"));
 dev = "nio-js run server.ts"
 build = "nio-js build server.ts -o dist/app.njs"
 start = "nio-js run dist/app.njs"
-dev_ui = "cd {} && {}"
+dev_ui = "cd {} && npm run dev"
 build_ui = "cd {} && {}"
 serve = "nio-js task dev & nio-js task dev_ui & wait"
-"#, kind, dev_cmd, kind, build_cmd);
+"#, kind, kind, build_cmd);
     fs::write(format!("{}/nio.toml", name), nio_toml)?;
 
     // Dockerfile at the root
@@ -236,9 +185,7 @@ CMD ["nio-js", "task", "start"]
     println!("\n✨ Monorepo project '{}' initialized successfully!\n", name);
     println!("Next steps:");
     println!("  cd {}", name);
-    if !final_deps.is_empty() || !final_dev_deps.is_empty() {
-        println!("  cd {} && npm install && cd ..", kind);
-    }
+    println!("  cd {} && npm install && cd ..", kind);
     println!("  nio-js task serve\n");
     Ok(())
 }
