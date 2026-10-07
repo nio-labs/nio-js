@@ -30,6 +30,28 @@
 
 ## 🗺️ Milestone Breakdown
 
+### 🛠️ Milestone 0.5: Scaffolding & Native Task Runner (`v0.2.5`)
+**Theme:** Rapid ecosystem initialization and native script orchestration (No NPM).
+
+- [ ] **Interactive Ecosystem Scaffolding (`nio-js init`):**
+  - **`nio-js init web`**: Generates a full-stack Nio ecosystem monorepo. Interactive prompts for:
+    - Frontend: Vanilla JS (zero-build), Lit, React, Vue, Eleventy.
+    - Database: `nio-db` or None.
+    - Intelligence: NioAI (Python tools/agents) or None.
+  - **`nio-js init app`**: Cross-platform mobile generation using Vue + Capacitor + NioJS backend API.
+  - **Ready-to-Deploy**: Generates an optimized `Dockerfile` and `docker-compose.yml` for instant production deployment of the full stack.
+- [ ] **Native Task Runner (`nio-js task`):**
+  - Drop the dependency on `package.json` and `npm run`.
+  - Introduce `nio.toml` to define custom workflow scripts:
+    ```toml
+    [tasks]
+    dev = "nio-js run server.ts --watch"
+    prod = "nio-js run app.njs --workers 4"
+    ```
+  - Execute via `nio-js task dev` for seamless orchestration of the UI, DB, and API.
+
+---
+
 ### 📦 Milestone 1: Streaming & Agent Protocols (`v0.3.0`)
 **Theme:** Real-time token streaming and bidirectional agent communication.
 
@@ -136,14 +158,6 @@
   - Kernel-offloaded static file serving (`route.static('/public')`) backed by Tokio `fs` and byte streaming.
 - [ ] **Single-File Bundling & Compression:**
   - Enhanced `.njs` capsule bundler with embedded bytecode caching and asset packing.
-- [ ] **Interactive Ecosystem Scaffolding (`nio-js init`):**
-  - **`nio-js init web`**: Generates a full-stack Nio ecosystem monorepo. Interactive prompts for:
-    - Frontend: Vanilla JS (zero-build), Lit, React, Vue, Eleventy.
-    - Database: `nio-db` or None.
-    - Intelligence: NioAI (Python tools/agents) or None.
-  - **`nio-js init app`**: Cross-platform mobile generation using Vue + Capacitor + NioJS backend API.
-  - **Unified DevEx**: All scaffolded projects include a pre-configured `package.json` with unified scripts (`npm run dev`, `npm run prod`) to orchestrate both the UI and Nio backend seamlessly.
-  - **Ready-to-Deploy**: Generates an optimized `Dockerfile` and `docker-compose.yml` for instant production deployment of the full stack.
 
 ---
 
@@ -192,10 +206,11 @@
 | Release | Focus | Key Deliverables |
 |---|---|---|
 | **v0.2.0** *(Current)* | Hybrid Engine & Performance | Bare-metal Rust offloading, in-process PyO3 Python AI, stdio MCP server, 68k+ req/sec |
+| **v0.2.5** | Scaffolding & Task Runner | `nio-js init`, `nio-js task`, `nio.toml`, Docker deployment |
 | **v0.3.0** | Protocols & Streaming | SSE token streaming, WebSockets, W3C OpenTelemetry tracing |
 | **v0.4.0** | `nio-db` Storage Tier | Native `db` client, reactive SSE mutation listener, in-memory query cache |
 | **v0.5.0** | `nio` Agent & Event Bus | Event workers (`on()`), dual MCP + `nio` tool registry (`tool()`), unified sandbox |
 | **v0.6.0** | Resilience & DevEx | Zero-downtime hot reload, worker resource limits, memory boundaries |
-| **v0.7.0** | Packaging, Static Assets & Scaffolding | Static asset serving, compiled `.njs` bytecode cache, optimized capsule distribution, nio-js init scaffolding |
+| **v0.7.0** | Packaging & Static Assets | Static asset serving, compiled `.njs` bytecode cache, optimized capsule distribution |
 | **v0.8.0** | WebAssembly & Polyglot Engine | Wasm runtime core, WASI support, safe execution for C/C++/Rust/Go capsules |
 | **v1.0.0** | **General Availability (GA)** | Frozen Capsule v1.0 spec, cross-ecosystem test suite, production deployment presets |
