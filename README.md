@@ -1,3 +1,5 @@
+<img src="docs/logo.svg" alt="NioJS Logo" height="120" />
+
 # NioJS
 
 The Hybrid, Agent-Native Worker Runtime. A compact JavaScript, TypeScript, and Python service runtime with portable `.njs` capsules, native Rust acceleration, and first-class Model Context Protocol (MCP) agent tooling.
