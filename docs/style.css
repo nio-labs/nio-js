@@ -110,7 +110,7 @@ body {
 }
 
 .brand-logo {
-  font-size: 26px;
+  height: 26px; width: 26px;
 }
 
 .brand-name {
