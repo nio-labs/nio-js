@@ -142,6 +142,8 @@
     - Database: `nio-db` or None.
     - Intelligence: NioAI (Python tools/agents) or None.
   - **`nio-js init app`**: Cross-platform mobile generation using Vue + Capacitor + NioJS backend API.
+  - **Unified DevEx**: All scaffolded projects include a pre-configured `package.json` with unified scripts (`npm run dev`, `npm run prod`) to orchestrate both the UI and Nio backend seamlessly.
+  - **Ready-to-Deploy**: Generates an optimized `Dockerfile` and `docker-compose.yml` for instant production deployment of the full stack.
 
 ---
 
