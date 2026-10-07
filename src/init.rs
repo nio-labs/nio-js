@@ -52,14 +52,9 @@ fn init_monorepo(kind: &str) -> Result<()> {
     // Generate root nio.toml (will be updated with UI tasks later)
     // Wait, we need to know the UI commands before generating it, so let's move this down.
     let server_ts = r#"// NioJS Backend Entrypoint
-import { serve } from "nio-js";
+import { get, reply } from "nio.js";
 
-serve({
-  port: 3000,
-  fetch(req) {
-    return new Response("Hello from NioJS Backend!");
-  }
-});
+get("/", () => reply("Hello from NioJS Backend!"));
 "#;
     fs::write(format!("{}/server.ts", name), server_ts)?;
 
