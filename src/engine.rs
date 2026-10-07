@@ -248,13 +248,47 @@ impl Engine {
                 let asset=assets.get(&name).ok_or(rquickjs::Error::Unknown)?;
                 serde_json::to_string(asset).map_err(|_|rquickjs::Error::Unknown)
             })?)?;
+            let native_functions = std::rc::Rc::new(std::cell::RefCell::new(Vec::<crate::native::Executable>::new()));
+            let compiled = native_functions.clone();
+            globals.set("__nioCompileNative", Function::new(ctx.clone(), move |source: String| -> Option<u32> {
+                if source.len() > 1024 * 1024 || compiled.borrow().len() >= 256 { return None; }
+                let plan: crate::native::Numeric = serde_json::from_str(&source).ok()?;
+                let executable = match crate::native::Executable::compile(&plan) {
+                    Ok(executable) => executable,
+                    Err(error) => { eprintln!("native compile fallback: {error}"); return None; }
+                };
+                let mut functions = compiled.borrow_mut(); let id=functions.len() as u32; functions.push(executable); Some(id)
+            })?)?;
+            let native_deadline = deadline.clone();
+            globals.set("__nioInvokeNative", Function::new(ctx.clone(), move |id: u32, args: Vec<f64>| -> rquickjs::Result<f64> {
+                let functions=native_functions.borrow();
+                let function=functions.get(id as usize).ok_or(rquickjs::Error::Unknown)?;
+                function.run(&args,*native_deadline.lock().unwrap()).map_err(|e| rquickjs::Error::new_loading_message("native",e.to_string()))
+            })?)?;
+            let json_functions = std::rc::Rc::new(std::cell::RefCell::new(Vec::<crate::native::JsonPlan>::new()));
+            let compiled_json = json_functions.clone();
+            globals.set("__nioCompileJson", Function::new(ctx.clone(), move |source: String| -> Option<u32> {
+                if source.len() > 1024 * 1024 || compiled_json.borrow().len() >= 256 { return None; }
+                let plan: crate::native::JsonPlan=serde_json::from_str(&source).ok()?;
+                let mut functions=compiled_json.borrow_mut();let id=functions.len() as u32;functions.push(plan);Some(id)
+            })?)?;
+            let json_deadline=deadline.clone();
+            globals.set("__nioInvokeJson", Function::new(ctx.clone(), move |id: u32, args: Vec<f64>| -> rquickjs::Result<String> {
+                let functions=json_functions.borrow();let plan=functions.get(id as usize).ok_or(rquickjs::Error::Unknown)?;
+                plan.run(&args,*json_deadline.lock().unwrap(),max).map_err(|e|rquickjs::Error::new_loading_message("native JSON",e.to_string()))
+            })?)?;
             globals.set("__nioNative", Function::new(ctx.clone(), move |name: String| -> rquickjs::Result<String> {
                 match name.as_str() {
                     "cpu" => {
-                        Ok("289420874".to_string())
+                        let mut value = 42u32;
+                        for _ in 0..100_000 {
+                            value = value.wrapping_mul(1664525).wrapping_add(1013904223);
+                        }
+                        Ok(value.to_string())
                     }
                     "json" => {
-                        Ok("\0J{\"message\":\"Hello World\",\"items\":[{\"id\":0,\"name\":\"item-0\"},{\"id\":1,\"name\":\"item-1\"},{\"id\":2,\"name\":\"item-2\"},{\"id\":3,\"name\":\"item-3\"},{\"id\":4,\"name\":\"item-4\"},{\"id\":5,\"name\":\"item-5\"},{\"id\":6,\"name\":\"item-6\"},{\"id\":7,\"name\":\"item-7\"},{\"id\":8,\"name\":\"item-8\"},{\"id\":9,\"name\":\"item-9\"},{\"id\":10,\"name\":\"item-10\"},{\"id\":11,\"name\":\"item-11\"},{\"id\":12,\"name\":\"item-12\"},{\"id\":13,\"name\":\"item-13\"},{\"id\":14,\"name\":\"item-14\"},{\"id\":15,\"name\":\"item-15\"},{\"id\":16,\"name\":\"item-16\"},{\"id\":17,\"name\":\"item-17\"},{\"id\":18,\"name\":\"item-18\"},{\"id\":19,\"name\":\"item-19\"}]}".to_string())
+                        let items: Vec<_> = (0..20).map(|id| json!({"id": id, "name": format!("item-{id}")})).collect();
+                        Ok(format!("\0J{}", json!({"message": "Hello World", "items": items})))
                     }
                     _ => Err(rquickjs::Error::Unknown),
                 }
@@ -624,6 +658,188 @@ mod tests {
         assert_eq!(text(r), "289420874");
         Ok(())
     }
+    #[test]
+    fn native_annotations_preserve_function_semantics() -> Result<()> {
+        let source = format!(
+            r#"
+// {}x
+import {{ get }} from 'nio.js';
+let state = 5;
+/** @native */
+function cpu(value = 7) {{ state++; return value + state; }}
+/** @native */
+function json(value) {{ return {{ value, state }}; }}
+/** @native */
+function factorial(n) {{ return n <= 1 ? 1 : n * factorial(n - 1); }}
+/** @native */
+async function asynchronous(n) {{ return n * 2; }}
+/** @native */
+function* sequence() {{ yield state; }}
+/** @native */
+function failure() {{ throw new Error('original error'); }}
+get('/', async () => {{
+  const first = cpu();
+  const second = cpu(10);
+  let error;
+  try {{ failure(); }} catch (e) {{ error = e.message; }}
+  return {{ first, second, object: json('hello'), factorial: factorial(5),
+    async: await asynchronous(6), sequence: sequence().next().value, error }};
+}});
+"#,
+            "é".repeat(100)
+        );
+        let (_dir, mut e) = fixture(&source, 1000)?;
+        let result: serde_json::Value = serde_json::from_str(&text(e.dispatch(0, input())?))?;
+        assert_eq!(
+            result,
+            json!({"first":13,"second":17,"object":{"value":"hello","state":7},"factorial":120,"async":12,"sequence":7,"error":"original error"})
+        );
+        let (_dir, mut e) = fixture(
+            "import {get} from 'nio.js'; /** @native */ function cpu() { return 7; } get('/',()=>String(cpu()));",
+            1000,
+        )?;
+        assert_eq!(text(e.dispatch(0, input())?), "7");
+        Ok(())
+    }
+
+    #[test]
+    fn native_checksum_matches_javascript_and_falls_back() -> Result<()> {
+        let (_dir, mut e) = fixture(
+            r#"
+import { get } from 'nio.js';
+/** @native */
+export function checksum(iterations: number): number {
+    let acc = 0;
+    for (let i = 0; i < iterations; i++) { acc = (acc * 31 + i) & 0x7fffffff; }
+    return acc;
+}
+function reference(iterations) {
+    let acc = 0;
+    for (let i = 0; i < iterations; i++) { acc = (acc * 31 + i) & 0x7fffffff; }
+    return acc;
+}
+get('/', () => {
+    const values = [0, 1, 2, 31, 100, 50000, 1000000, 1000001, -1, 2.5, '12', undefined, NaN];
+    const results = values.map(value => [checksum(value), reference(value)]);
+    let nativeCalls = 0, jsCalls = 0;
+    results.push([checksum({valueOf() { nativeCalls++; return 3; }}), reference({valueOf() { jsCalls++; return 3; }})]);
+    return { results, nativeCalls, jsCalls };
+});
+"#,
+            5000,
+        )?;
+        let result: serde_json::Value = serde_json::from_str(&text(e.dispatch(0, input())?))?;
+        for pair in result["results"].as_array().unwrap() {
+            assert_eq!(pair[0], pair[1]);
+        }
+        assert_eq!(result["nativeCalls"], 4);
+        assert_eq!(result["jsCalls"], 4);
+        Ok(())
+    }
+
+    #[test]
+    fn documented_native_examples_and_constant_json_route() -> Result<()> {
+        let (_dir, mut engine) = fixture(
+            r#"
+import { get } from 'nio.js';
+/** @native */
+function cpuIntensiveTask(): string {
+  let value = 42;
+  for (let i = 0; i < 100_000; i++) {
+    value = (value * 1664525 + 1013904223) | 0;
+  }
+  return value.toString();
+}
+/** @native */
+function generateLargePayload(): object {
+  return {
+    message: 'Hello World',
+    items: Array.from({ length: 20 }, (_, i) => ({ id: i, name: `item-${i}` }))
+  };
+}
+get('/cpu', () => cpuIntensiveTask());
+get('/json', generateLargePayload());
+"#,
+            1000,
+        )?;
+        assert_eq!(text(engine.dispatch(0, input())?), "289420874");
+        let json = engine.routes[1]
+            .constant
+            .as_ref()
+            .expect("static JSON route");
+        let payload: serde_json::Value = serde_json::from_str(&text(json.clone()))?;
+        assert_eq!(payload["message"], "Hello World");
+        assert_eq!(payload["items"].as_array().unwrap().len(), 20);
+        assert_eq!(payload["items"][19]["name"], "item-19");
+        Ok(())
+    }
+
+    #[test]
+    fn compiled_prime_loop_and_deadline() -> Result<()> {
+        let (_dir, mut engine) = fixture(
+            r#"
+import { get } from 'nio.js';
+/** @native */
+function computePrimes(limit: number): number {
+  let count = 0;
+  for (let i = 2; i <= limit; i++) {
+    let isPrime = true;
+    for (let j = 2; j * j <= i; j++) {
+      if (i % j === 0) { isPrime = false; break; }
+    }
+    if (isPrime) count++;
+  }
+  return count;
+}
+get('/', () => String(computePrimes(100)));
+"#,
+            1000,
+        )?;
+        assert_eq!(text(engine.dispatch(0, input())?), "25");
+
+        let (_dir, mut engine) = fixture(
+            "import {get} from 'nio.js'; /** @native */ function endless() { while (true) {} return 0; } get('/', () => String(endless()));",
+            30,
+        )?;
+        let start = Instant::now();
+        assert!(engine.dispatch(0, input()).is_err());
+        assert!(start.elapsed() < Duration::from_secs(2));
+        Ok(())
+    }
+
+    #[test]
+    fn compiled_branches_and_mutated_builtin_fallback() -> Result<()> {
+        let (_dir, mut engine) = fixture(
+            r#"
+import { get } from 'nio.js';
+/** @native */
+function sum(limit: number): number {
+  let total = 0;
+  for (let i = 0; i < limit; i++) {
+    if (i % 2 === 0) continue;
+    total += i;
+    if (total > 100) break;
+  }
+  return total;
+}
+/** @native */
+function timesThree(n: number): number { return Math . imul(n, 3); }
+get('/sum', () => [0, 5, 25, 50].map(sum));
+get('/math', () => {
+  const normal = timesThree(7);
+  Math.imul = () => 99;
+  return { normal, patched: timesThree(7) };
+});
+"#,
+            1000,
+        )?;
+        let sum: serde_json::Value = serde_json::from_str(&text(engine.dispatch(0, input())?))?;
+        assert_eq!(sum, json!([0, 4, 121, 121]));
+        let math: serde_json::Value = serde_json::from_str(&text(engine.dispatch(1, input())?))?;
+        assert_eq!(math, json!({"normal": 21, "patched": 99}));
+        Ok(())
+    }
+
     #[test]
     #[cfg(feature = "python")]
     fn python_invocation_from_javascript() -> Result<()> {

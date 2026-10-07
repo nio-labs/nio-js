@@ -117,11 +117,19 @@ impl<'a> Visit<'a> for Imports {
     }
 }
 
-fn detect_native_functions(program: &Program, source: &str) -> Vec<(String, usize, usize)> {
-    if !source.contains("@native") {
-        return Vec::new();
-    }
+// Comments come from parser spans, so Unicode cannot split an arbitrary byte window.
+fn detect_native_functions(
+    program: &Program,
+    source: &str,
+    ty: SourceType,
+) -> Vec<(String, usize, usize, String)> {
     let mut results = Vec::new();
+    if source.contains("__nioNative")
+        || source.contains("__nioCompileNative")
+        || source.contains("__nioInvokeNative")
+    {
+        return results;
+    }
     for stmt in &program.body {
         let (func, decl_start) = match stmt {
             Statement::ExportDeclaration(decl) => {
@@ -134,24 +142,111 @@ fn detect_native_functions(program: &Program, source: &str) -> Vec<(String, usiz
             Statement::FunctionDeclaration(f) => (Some(&**f), f.span.start as usize),
             _ => (None, 0),
         };
-        if let Some(oxc_ast::ast::Function {
-            id: Some(id),
-            body: Some(body),
-            span,
-            ..
-        }) = func
-        {
-            let func_start = span.start as usize;
-            let check_start = decl_start.min(func_start).saturating_sub(150);
-            let check_end = func_start.min(source.len());
-            if check_start < check_end && source[check_start..check_end].contains("@native") {
-                results.push((
-                    id.name.to_string(),
-                    body.span.start as usize,
-                    body.span.end as usize,
-                ));
+        let Some(func) = func else { continue };
+        let annotated = program.comments.iter().any(|comment| {
+            comment.is_leading()
+                && comment.span.end as usize <= decl_start
+                && source
+                    .get(comment.span.end as usize..decl_start)
+                    .is_some_and(|gap| gap.trim().is_empty())
+                && source
+                    .get(comment.span.start as usize..comment.span.end as usize)
+                    .is_some_and(|text| {
+                        text.split(|c: char| c.is_whitespace() || c == '*')
+                            .any(|word| word == "@native")
+                    })
+        });
+        if !annotated {
+            continue;
+        }
+        let Some(body) = &func.body else { continue };
+        let Some(function_source) = source.get(func.span.start as usize..func.span.end as usize)
+        else {
+            continue;
+        };
+        let Ok((javascript, _, _)) = compile_inner("native.ts", function_source, ty) else {
+            continue;
+        };
+        let (serialized, params, string, json, array_from, builtins) =
+            if let Ok(plan) = crate::native::numeric(&javascript) {
+                (
+                    serde_json::to_string(&plan).unwrap(),
+                    plan.params,
+                    plan.string,
+                    false,
+                    false,
+                    plan.builtins,
+                )
+            } else if let Ok(plan) = crate::native::json_plan(&javascript) {
+                (
+                    serde_json::to_string(&plan).unwrap(),
+                    plan.params,
+                    false,
+                    true,
+                    plan.array_from,
+                    plan.builtins,
+                )
+            } else {
+                continue;
+            };
+        // A large native plan must never make an otherwise valid application fail at startup.
+        if serialized.len() > 512 * 1024 || results.len() >= 256 {
+            continue;
+        }
+        let name = format!("__nioNative{}", results.len());
+        let prefix = format!(
+            "var {name} = {}({});\n",
+            if json {
+                "__nioCompileJson"
+            } else {
+                "__nioCompileNative"
+            },
+            serde_json::to_string(&serialized).unwrap()
+        );
+        let args = params.join(",");
+        let mut guard = if params.is_empty() {
+            "true".into()
+        } else {
+            params
+                .iter()
+                .map(|p| format!("typeof {p} === 'number'"))
+                .collect::<Vec<_>>()
+                .join(" && ")
+        };
+        guard.push_str(&format!(" && typeof {name} === 'number'"));
+        if array_from {
+            guard.push_str(
+                " && Array === __nioOriginalArray && Array.from === __nioOriginalArrayFrom",
+            );
+        }
+        for builtin in builtins {
+            if builtin == "String" {
+                guard.push_str(" && String === __nioOriginalString");
+            } else {
+                guard.push_str(&format!(" && Math === __nioOriginalMath && Math.{builtin} === __nioOriginalMath{builtin}"));
             }
         }
+        if json {
+            for p in &params {
+                guard.push_str(&format!(" && {p} % 1 === 0 && {p} > -1e21 && {p} < 1e21"));
+            }
+        }
+        let invocation = format!(
+            "{}({name}, [{args}]){}",
+            if json {
+                "__nioDecodeNativeJson"
+            } else {
+                "__nioInvokeNative"
+            },
+            if string { ".toString()" } else { "" }
+        );
+        let start = body.span.start as usize;
+        let end = body.span.end as usize;
+        let Some(original) = source.get(start + 1..end - 1) else {
+            continue;
+        };
+        let replacement = format!("{{ if ({guard}) return {invocation}; {original} }}");
+        results.push((replacement, start, end, prefix));
     }
     results
 }
@@ -240,19 +335,21 @@ fn compile(name: &str, source: &str) -> Result<(String, Vec<String>, String)> {
         let allocator = Allocator::default();
         let parsed = Parser::new(&allocator, source, ty).parse();
         if parsed.diagnostics.is_empty() {
-            let native_fns = detect_native_functions(&parsed.program, source);
+            let native_fns = detect_native_functions(&parsed.program, source, ty);
             if !native_fns.is_empty() {
                 let mut transformed = source.to_string();
                 let mut sorted = native_fns;
                 sorted.sort_by_key(|a| std::cmp::Reverse(a.1));
-                for (name, start, end) in sorted {
+                let prefixes = sorted
+                    .iter()
+                    .map(|item| item.3.as_str())
+                    .collect::<String>();
+                for (replacement, start, end, _) in sorted {
                     if start < end && end <= transformed.len() {
-                        transformed.replace_range(
-                            start..end,
-                            &format!("{{\n  return __nioNative(\"{name}\");\n}}"),
-                        );
+                        transformed.replace_range(start..end, &replacement);
                     }
                 }
+                transformed.insert_str(0, &prefixes);
                 return compile_inner(name, &transformed, ty);
             }
         }
@@ -701,10 +798,30 @@ mod tests {
         );
     }
     #[test]
-    fn native_directive_transforms_function() -> Result<()> {
-        let code = "/** @native */\nexport function cpu() {\n  let x = 1;\n  for (let i = 0; i < 100; i++) x += i;\n  return x;\n}\n";
-        let (compiled, _, _) = compile("workload.js", code)?;
-        assert!(compiled.contains("__nioNative(\"cpu\")"));
+    fn native_directive_matches_code_not_names() -> Result<()> {
+        let checksum = "/** @native */\nexport function checksum(iterations: number): number { let acc = 0; for (let i = 0; i < iterations; i++) { acc = (acc * 31 + i) & 0x7fffffff; } return acc; }";
+        assert!(
+            compile("workload.ts", checksum)?
+                .0
+                .contains("__nioInvokeNative")
+        );
+        for source in [
+            "const marker = '@native'; function checksum(iterations) { let acc = 0; for (let i = 0; i < iterations; i++) { acc = (acc * 31 + i) & 0x7fffffff; } return acc; }",
+            "/** @native */ function other() {} function checksum(iterations) { let acc = 0; for (let i = 0; i < iterations; i++) { acc = (acc * 31 + i) & 0x7fffffff; } return acc; }",
+        ] {
+            assert!(!compile("workload.js", source)?.0.contains("__nioNative"));
+        }
+        assert!(
+            compile("changed.js", "/** @native */ function cpu() { return 7; }")?
+                .0
+                .contains("__nioInvokeNative")
+        );
+        let unicode = format!("// {}x\n{checksum}", "é".repeat(100));
+        assert!(
+            compile("unicode.ts", &unicode)?
+                .0
+                .contains("__nioInvokeNative")
+        );
         Ok(())
     }
 }

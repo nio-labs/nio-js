@@ -1,7 +1,7 @@
 # The Complete Guide to NioJS
 
 > **The Hybrid, Agent-Native Worker Runtime**  
-> Sub-millisecond boot · Native Rust offloading · In-process Python AI · Zero-dependency capsules
+> Fast startup · Native Rust offloading · In-process Python AI · Portable capsules
 
 ---
 
@@ -237,8 +237,7 @@ post('/api/upload', async ({ formData }) => {
 
 ### The `/** @native */` Directive
 
-Prefix any compute-heavy function with `/** @native */`. `NioJS` automatically recognizes the directive and executes the logic via optimized native host paths:
-
+`/** @native */` compiles eligible numeric functions to machine code in the Rust host at worker startup. It also supports pure JSON generation through Rust. The original JavaScript remains available for calls that cannot use the native path. The example below uses supported numeric loops and branches:
 ```typescript
 import { get } from 'nio.js';
 
@@ -264,6 +263,8 @@ get('/primes', ({ query }) => {
 });
 ```
 
+Other supported functions can use local arithmetic, bitwise operations, `if`, `for`, `while`, `break`, `continue`, and selected `Math` operations. Pure object and array expressions can use bounded `Array.from` generation. The [native guide](docs/native.html) lists the contract and limits. Rebuild old capsules to get the corrected behavior.
+
 ### Multi-Worker Core Pinning
 
 Scale effortlessly across all physical and logical CPU cores:
@@ -275,20 +276,9 @@ nio-js run app.ts --workers 8 --port 3000
 
 Each worker runs its own isolated QuickJS runtime instance sharing the same port listener via Tokio socket reuse, guaranteeing linear multi-core scaling.
 
-### Bare-Metal Benchmark Highlights
+### Benchmark status
 
-Measured on WSL2 Linux (Intel Core Ultra 5 135H) using 1-round "quick" methodology without warmup:
-
-| Criterion | NioJS | Bun | Node | Deno | Verdict |
-|:---|:---|:---|:---|:---|:---|
-| **Startup** | **13.32 ms** *(Zero Python overhead)* | 25.08 ms | 54.27 ms | 24.99 ms | 🏆 **Clear Win** (Fastest cold start) |
-| **Idle RSS** | **14.38 MiB** *(Python unallocated)* | 19.25 MiB | 60.44 MiB | 47.16 MiB | 🏆 **Clear Win** (Lowest memory footprint) |
-| **/constant** | **15,700 req/s** | 11,046 req/s | 9,322 req/s | 11,594 req/s | 🚀 **Crushing Win** (Destroys the competition) |
-| **/callback** | **12,758 req/s** | 10,406 req/s | 8,272 req/s | 11,882 req/s | 🏆 **Clear Win** (Beats the competition) |
-| **/json** | **15,016 req/s** | 9,865 req/s | 8,349 req/s | 9,703 req/s | 🚀 **Crushing Win** (Destroys the competition) |
-| **/cpu (100k loop)** | **25,000 – 40,000+ req/s** | 9,282 req/s | 9,001 req/s | 9,151 req/s | 🚀 **Crushing Win** (3x–4x faster than Bun/Node) |
-
-> **Note on Python & Startup**: Python execution is completely modular and loaded on-demand. Standard TypeScript/JavaScript services, static routing, and native loops incur **zero Python startup latency** and zero Python memory footprint. Full benchmark reproduction scripts are located in [`benchmarks/README.md`](benchmarks/README.md).
+The native compiler changed. Startup, memory, CPU, and JSON results need to be measured again before publishing current comparisons. The [benchmark harness and archived results](benchmarks/README.md) remain available for reproduction.
 
 ---
 

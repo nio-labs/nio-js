@@ -1,5 +1,7 @@
 # Local benchmark results
 
+Historical results from nio-js 0.2.0. Native CPU and JSON behavior has changed; these measurements, including startup and memory, are not current performance claims. Rerun the suite before comparing the current runtime.
+
 Run: 2026-10-07T01:52:00.414601+00:00
 
 Machine: {'os': 'GNU/Linux 6.18.33.2-microsoft-standard-WSL2', 'architecture': 'x86_64', 'cpu': 'Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H Intel(R) Core(TM) Ultra 5 135H', 'logical_cpus': 18, 'ram_gib': 7391.16015625}. Versions: {'nio': 'nio-js 0.2.0', 'node': 'v24.18.1', 'bun': '1.4.2', 'deno': 'deno 2.9.4 (stable, release, x86_64-unknown-linux-gnu)'}.

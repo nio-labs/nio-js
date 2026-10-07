@@ -1,4 +1,4 @@
-/** nio-js 0.1 preview. Add this file to your tsconfig's include list. */
+/** nio-js 0.2 preview. Add this file to your tsconfig's include list. */
 declare module 'nio.js' {
   export interface RequestContext {
     method: string;
@@ -19,8 +19,8 @@ declare module 'nio.js' {
   export type Body = string | Blob | Json[] | { [key: string]: unknown };
   export type Result = Body | Response | ExplicitReply;
   export type Handler = (request: RequestContext) => Result | Promise<Result>;
-  export function get(path: string, handler: Handler | string | Blob | ExplicitReply): void;
-  export function post(path: string, handler: Handler | string | Blob | ExplicitReply): void;
+  export function get(path: string, handler: Handler | Body | ExplicitReply): void;
+  export function post(path: string, handler: Handler | Body | ExplicitReply): void;
   export function reply(body: unknown, options?: ReplyOptions): ExplicitReply;
   export function asset(name: string): Blob;
   export function redirect(location: string, status?: number): ExplicitReply;

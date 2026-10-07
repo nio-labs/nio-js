@@ -95,28 +95,19 @@
           <h1>Native Acceleration Guide</h1>
           <p class="lead">
             <strong>NioJS</strong> achieves its incredible performance through <strong>Hybrid Execution</strong>. 
-            By combining lightweight QuickJS for fast startup and business logic with pre-compiled <strong>Rust</strong> for heavy lifting, you get the best of both worlds.
-          </p>
-
-          <h2>The Problem: Interpreters vs JITs</h2>
-          <p>
-            Standard V8-based runtimes like Node.js and Bun use heavy Just-In-Time (JIT) compilers. While fast at peak, JITs consume massive amounts of idle memory and suffer from "warm-up" delays. 
-            NioJS uses QuickJS, an interpreter that starts in ~13ms and uses just 14MiB of memory. However, pure interpreted JavaScript can be slow for heavy CPU loops.
-          </p>
-          <p>
-            <strong>The Solution:</strong> Bypass JavaScript entirely for hot paths.
+            By combining lightweight QuickJS for fast startup and business logic with a <strong>Rust host</strong> that compiles supported numeric work for heavy lifting, you get the best of both worlds.
           </p>
 
           <h2>How <code>/** @native */</code> Works</h2>
           <p>
-            When you build an application, the NioJS Oxc parser scans your TypeScript for the <code>/** @native */</code> JSDoc directive.
+            At build time, NioJS parses annotated functions and validates the supported operations. Numeric functions using local variables, arithmetic, branches, and loops are lowered to a portable plan in the capsule. At worker startup, the Rust host compiles the plan to machine code with Cranelift. Each loop checks the request deadline.
           </p>
-          <ol>
-            <li><strong>Build-Time AST Transformation:</strong> The parser strips the JavaScript implementation and replaces it with a binding to the Rust host environment (<code>__nioNative</code>).</li>
-            <li><strong>Runtime Execution:</strong> Calling the function invokes native, optimized Rust machine code instead of interpreting JS bytecodes.</li>
-            <li><strong>Zero-Overhead Routing:</strong> If a native function returns static content (like a JSON payload), the NioJS bootstrapper evaluates it exactly once during startup and loads the raw bytes directly into the Rust HTTP router cache.</li>
-          </ol>
-          <p>This means your hot routes <strong>never enter the JavaScript engine at all</strong>.</p>
+          <p>
+            Pure object and array expressions, including the <code>Array.from</code> pattern below, run through a bounded Rust JSON builder. A response created during route registration is cached as bytes and served directly by Rust.
+          </p>
+          <p>
+            The original JavaScript body stays in the capsule. Calls with unsupported argument types, or functions that use operations outside the supported subset, run as JavaScript. This keeps closures, side effects, and exceptions intact. The annotation is an optimization hint, not a compiler for every JavaScript feature.
+          </p>
 
           <h2>Example: CPU-Heavy Loops</h2>
           <p>Consider a tight mathematical loop that would normally choke an interpreter:</p>
@@ -124,8 +115,6 @@
 
 /** @native */
 function cpuIntensiveTask(): string {
-  // In development, this fallback runs.
-  // In production, NioJS intercepts this and runs the Rust-optimized equivalent!
   let value = 42;
   for (let i = 0; i < 100_000; i++) {
     value = (value * 1664525 + 1013904223) | 0;
@@ -139,7 +128,7 @@ get('/cpu', () => cpuIntensiveTask());
           <h2>Example: JSON & Static Caching</h2>
           <p>You can also use this for complex JSON structures that don't change per-request, instantly beating standard JSON serializers:</p>
           <pre><code class="language-typescript">/** @native */
-function generateLargePayload(): object {
+function generateLargePayload(): Record<string, unknown> {
     return {
         message: "Hello World",
         items: Array.from({ length: 20 }, (_, i) => ({ id: i, name: `item-${i}` }))
@@ -149,44 +138,16 @@ function generateLargePayload(): object {
 get('/json', generateLargePayload());
 </code></pre>
 
-          <h2>Crushing the Benchmarks</h2>
-          <p>Because of native offloading and static router caching, NioJS completely destroys traditional JIT runtimes in bare-metal benchmarks (WSL2 Linux, Intel Core Ultra 5):</p>
-          
-          <table style="width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 2rem; font-size: 0.95rem;">
-            <thead>
-              <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
-                <th style="padding: 10px;">Runtime</th>
-                <th style="padding: 10px;">/json (req/s)</th>
-                <th style="padding: 10px;">/cpu (100k loop req/s)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr style="border-bottom: 1px solid var(--border-color); font-weight: 600;">
-                <td style="padding: 10px;">NioJS (Native)</td>
-                <td style="padding: 10px; color: #10b981;">15,016 🚀</td>
-                <td style="padding: 10px; color: #10b981;">14,389 🚀</td>
-              </tr>
-              <tr style="border-bottom: 1px solid var(--border-color);">
-                <td style="padding: 10px;">Bun</td>
-                <td style="padding: 10px;">9,865</td>
-                <td style="padding: 10px;">5,139</td>
-              </tr>
-              <tr style="border-bottom: 1px solid var(--border-color);">
-                <td style="padding: 10px;">Deno</td>
-                <td style="padding: 10px;">9,703</td>
-                <td style="padding: 10px;">6,147</td>
-              </tr>
-              <tr>
-                <td style="padding: 10px;">Node.js</td>
-                <td style="padding: 10px;">8,349</td>
-                <td style="padding: 10px;">4,689</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div class="alert alert-success" style="background:#d1fae5; color:#065f46; padding:15px; border-radius:4px;">
-            <strong>The Result:</strong> The native offloading enables <strong>3x faster CPU execution</strong> and <strong>1.5x faster JSON serialization</strong> compared to V8/JavaScriptCore JITs, while consuming 75% less idle memory.
-          </div>
+          <h2>Supported Operations and Limits</h2>
+          <p>
+            Numeric functions can use up to 16 numeric parameters, local <code>let</code>/<code>const</code> declarations, arithmetic and bitwise operators, comparisons, <code>if</code>, <code>for</code>, <code>while</code>, <code>break</code>, <code>continue</code>, selected <code>Math</code> functions, and a numeric or stringified numeric return. Pure JSON expressions can contain objects, arrays, strings, booleans, numbers, template strings with numeric values, and bounded <code>Array.from</code> generation.
+          </p>
+          <p>
+            Calls involving closures, custom objects, or other JavaScript features use the original implementation. Native execution follows the configured request deadline and response-size limit. Rebuild existing <code>.njs</code> capsules to use this implementation.
+          </p>
+          <p>
+            The older CPU and JSON benchmark numbers were measured with a name-based substitution that did not preserve function behavior. They are withdrawn until the corrected implementation is benchmarked again.
+          </p>
 
         </section>
         

@@ -1,6 +1,7 @@
 mod engine;
 mod init;
 mod mcp;
+mod native;
 mod network;
 mod prepare;
 pub mod python;

@@ -284,15 +284,7 @@ Exposes JSON-RPC 2.0 tools:
 
 ## Hybrid Native Acceleration
 
-Hot loops and compute-heavy logic can be offloaded directly to compiled Rust without JIT warmup delays:
-
-```typescript
-/** @native */
-function cpu(): string {
-  // Analyzed by OXC parser at compile time;
-  // executes compiled Rust native loop at runtime.
-}
-```
+`/** @native */` is an optimization hint for eligible functions. Numeric functions with local variables, arithmetic, branches, loops, and selected `Math` calls are compiled to machine code by the Rust host at worker startup. Pure object and array expressions, including bounded `Array.from` generation, use a Rust JSON builder. Unsupported code and calls with nonnumeric arguments retain their JavaScript behavior. The [native guide](docs/native.html) shows both supported examples and limits.
 
 Multi-worker servers also automatically detect physical CPU topologies and pin worker threads (`pthread_setaffinity_np` on Linux) to prevent cross-core cache thrashing.
 
@@ -302,22 +294,9 @@ Integrate standard Python libraries (`pandas`, `scipy`), machine learning models
 
 📖 **[Read the Full Python Integration Guide](https://nio-labs.github.io/nio-js/python.html)** to learn how to write full Python code natively inside NioJS.
 
-## Benchmark Highlights (Bare Metal)
+## Benchmark status
 
-Measured on WSL2 Linux (Intel Core Ultra 5 135H) using 1-round "quick" methodology without warmup:
-
-| Criterion | NioJS | Bun | Node | Deno | Verdict |
-|:---|:---|:---|:---|:---|:---|
-| **Startup** | **13.32 ms** *(Zero Python overhead)* | 25.08 ms | 54.27 ms | 24.99 ms | 🏆 **Clear Win** (Fastest cold start) |
-| **Idle RSS** | **14.38 MiB** *(Python unallocated)* | 19.25 MiB | 60.44 MiB | 47.16 MiB | 🏆 **Clear Win** (Lowest memory footprint) |
-| **/constant** | **15,700 req/s** | 11,046 req/s | 9,322 req/s | 11,594 req/s | 🚀 **Crushing Win** (Destroys the competition) |
-| **/callback** | **12,758 req/s** | 10,406 req/s | 8,272 req/s | 11,882 req/s | 🏆 **Clear Win** (Beats the competition) |
-| **/json** | **15,016 req/s** | 9,865 req/s | 8,349 req/s | 9,703 req/s | 🚀 **Crushing Win** (Destroys the competition) |
-| **/cpu (100k loop)** | **14,389 req/s** | 5,139 req/s | 4,689 req/s | 6,147 req/s | 🚀 **Crushing Win** (Destroys the competition) |
-
-> **Note on Python & Startup**: Python execution is completely modular and loaded on-demand. Standard TypeScript/JavaScript services, static routing, and native loops incur **zero Python startup latency** and zero Python memory footprint.
-
-Detailed benchmark methodology and reproduction instructions are in [benchmarks/README.md](benchmarks/README.md).
+The native compiler changed. Startup, memory, CPU, and JSON results need to be measured again before publishing current comparisons. The [benchmark harness and archived results](benchmarks/README.md) remain available for reproduction.
 
 ## Validation
 

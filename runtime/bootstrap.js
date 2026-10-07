@@ -1,5 +1,12 @@
 (() => {
   const routes = [];
+  const nativeParse = JSON.parse;
+  globalThis.__nioOriginalString = String;
+  globalThis.__nioOriginalMath = Math;
+  for (const method of ['imul', 'sqrt', 'floor', 'ceil', 'trunc', 'abs']) globalThis['__nioOriginalMath' + method] = Math[method];
+  globalThis.__nioOriginalArray = Array;
+  globalThis.__nioOriginalArrayFrom = Array.from;
+  globalThis.__nioDecodeNativeJson = (id, args) => nativeParse(__nioInvokeJson(id, args));
   const pending = new Map();
   let nextOperation = 0;
   let closed = false;
@@ -133,7 +140,7 @@
   globalThis.__nioRegister = (method, path, handler) => {
     if (closed) throw new Error('Route registration is closed');
     if (typeof path !== 'string' || !path.startsWith('/') || /[?#]/.test(path)) throw new TypeError('Invalid route path');
-    if (typeof handler !== 'function' && typeof handler !== 'string' && !(handler instanceof Blob) && handler?.__nioReply !== true) throw new TypeError('Handler must be a function or supported constant response');
+    if (typeof handler !== 'function' && typeof handler !== 'string' && !(handler instanceof Blob) && handler?.__nioReply !== true && !(handler && typeof handler === 'object' && (Array.isArray(handler) || Object.getPrototypeOf(handler) === Object.prototype))) throw new TypeError('Handler must be a function or supported constant response');
     if (routes.some(r => r.method === method && r.path === path)) throw new Error('Duplicate route');
     routes.push({ method, path, handler });
   };
@@ -180,14 +187,6 @@
       let constant = null;
       if (typeof r.handler !== 'function') {
         constant = encodeReply(r.handler);
-      } else {
-        const code = r.handler.toString();
-        const match = code.match(/__nioNative\(['"]([^'"]+)['"]\)/);
-        if (match) {
-          try {
-            constant = encodeReply(__nioNative(match[1]));
-          } catch (e) {}
-        }
       }
       return {
         method: r.method,
