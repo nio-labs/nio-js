@@ -155,11 +155,6 @@
           <p>For Windows (PowerShell):</p>
           <pre><code class="language-powershell">irm https://raw.githubusercontent.com/nio-labs/nio-js/main/install.ps1 | iex</code></pre>
 
-          <h3>Project Scaffolding</h3>
-          <p>The fastest way to start building is using the interactive scaffolder to generate a full-stack monorepo:</p>
-          <pre><code class="language-bash">nio-js init</code></pre>
-          <p>This auto-generates a wired frontend (Vue, React, Svelte, etc.) and a NioJS backend with native tasks.</p>
-
           <h3>Using the NPM Launcher</h3>
           <pre><code class="language-bash"># Run without installing:
 npx @nio-labs/nio-js --help
@@ -172,6 +167,11 @@ npm install -g @nio-labs/nio-js</code></pre>
 cd nio-js
 cargo build --release
 sudo install -m 755 target/release/nio-js /usr/local/bin/nio-js</code></pre>
+
+          <h3>Project Scaffolding (Optional Add-on)</h3>
+          <p>You can optionally scaffold a new full-stack project or mobile app using the interactive initialization tool:</p>
+          <pre><code class="language-bash">nio-js init</code></pre>
+          <p>This auto-generates a wired frontend (Vue, React, Svelte, etc.) and a NioJS backend with native tasks.</p>
         </section>
 
         <!-- Section 3: CLI Reference -->

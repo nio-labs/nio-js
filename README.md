@@ -11,15 +11,6 @@ The engine is embedded through `rquickjs` 0.14 (QuickJS-NG) coupled with a multi
 
 📖 **[Read the Complete Guide to NioJS](GUIDE.md)** *(or browse online at [nio-labs.github.io/nio-js](https://nio-labs.github.io/nio-js/))* for detailed architecture, API reference, native acceleration, and deployment patterns.
 
-## Getting Started
-
-Initialize a new full-stack project or mobile app using the interactive scaffolder:
-
-```bash
-nio-js init
-```
-
-This will automatically generate a monorepo setup featuring your chosen UI framework (Vue, React, Svelte, Lit, etc.), a NioJS backend, and native tooling (database, AI).
 
 ## Run
 
@@ -69,6 +60,16 @@ npx @nio-labs/nio-js run app.ts
 ```
 
 The npm launcher requires Node 18+. Standalone binaries and checksums are also available directly from [GitHub Releases](https://github.com/nio-labs/nio-js/releases). Installation downloads become available once the first release is published.
+
+### Project Scaffolding (Optional)
+
+You can quickly scaffold a new full-stack project or mobile app using the interactive initialization tool:
+
+```bash
+nio-js init
+```
+
+This will automatically generate a monorepo setup featuring your chosen UI framework (Vue, React, Svelte, Lit, etc.), a NioJS backend, and native tooling (database, AI).
 
 Android ARM64 binaries are included for a Termux preview. Run `pkg install curl coreutils`, then use the installer above; it installs into `$PREFIX/bin`. Real ARM64 device validation is still required.
 
