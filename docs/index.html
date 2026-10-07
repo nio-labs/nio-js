@@ -155,6 +155,11 @@
           <p>For Windows (PowerShell):</p>
           <pre><code class="language-powershell">irm https://raw.githubusercontent.com/nio-labs/nio-js/main/install.ps1 | iex</code></pre>
 
+          <h3>Project Scaffolding</h3>
+          <p>The fastest way to start building is using the interactive scaffolder to generate a full-stack monorepo:</p>
+          <pre><code class="language-bash">nio-js init</code></pre>
+          <p>This auto-generates a wired frontend (Vue, React, Svelte, etc.) and a NioJS backend with native tasks.</p>
+
           <h3>Using the NPM Launcher</h3>
           <pre><code class="language-bash"># Run without installing:
 npx @nio-labs/nio-js --help
@@ -183,6 +188,11 @@ sudo install -m 755 target/release/nio-js /usr/local/bin/nio-js</code></pre>
               </thead>
               <tbody>
                 <tr>
+                  <td><code>nio-js init [kind]</code></td>
+                  <td><code>--name &lt;n&gt;</code>, <code>--framework &lt;fw&gt;</code></td>
+                  <td>Interactive scaffolder for web/mobile apps and backend services.</td>
+                </tr>
+                <tr>
                   <td><code>nio-js run &lt;entry&gt;</code></td>
                   <td><code>--port &lt;p&gt;</code>, <code>--host &lt;h&gt;</code>, <code>--workers &lt;n&gt;</code></td>
                   <td>Launch a live dev server from a <code>.ts</code>, <code>.js</code>, or <code>.njs</code> file.</td>
@@ -196,6 +206,11 @@ sudo install -m 755 target/release/nio-js /usr/local/bin/nio-js</code></pre>
                   <td><code>nio-js check &lt;entry&gt;</code></td>
                   <td><code>--format=agent-json</code>, <code>--format=pretty</code></td>
                   <td>Perform instant syntax and module dependency validation without listening.</td>
+                </tr>
+                <tr>
+                  <td><code>nio-js task &lt;name&gt;</code></td>
+                  <td>None</td>
+                  <td>Run native orchestration scripts defined in <code>nio.toml</code>.</td>
                 </tr>
                 <tr>
                   <td><code>nio-js mcp</code></td>
