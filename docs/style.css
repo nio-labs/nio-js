@@ -67,7 +67,7 @@ body {
 
 .brand-title {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   text-decoration: none;
   color: var(--text-primary);
@@ -103,7 +103,7 @@ body {
 
 .sidebar-brand {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   text-decoration: none;
   color: var(--text-primary);
@@ -111,6 +111,7 @@ body {
 
 .brand-logo {
   height: 26px; width: 26px;
+  margin-top: 2px;
 }
 
 .brand-name {
