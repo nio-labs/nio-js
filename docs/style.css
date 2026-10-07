@@ -97,7 +97,7 @@ body {
 }
 
 .sidebar-header {
-  padding: 24px 20px 16px;
+  padding: 20px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -117,12 +117,15 @@ body {
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.5px;
+  line-height: 1;
 }
 
 .brand-sub {
   font-size: 11px;
   color: var(--text-secondary);
   font-weight: 500;
+  line-height: 1;
+  margin-top: 4px;
 }
 
 .sidebar-nav {
