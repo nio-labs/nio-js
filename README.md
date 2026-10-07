@@ -287,28 +287,9 @@ Multi-worker servers also automatically detect physical CPU topologies and pin w
 
 ## Python AI Bridge
 
-Integrate Python machine learning libraries and scripts directly into your TypeScript services without IPC or microservice latency:
+Integrate standard Python libraries (`pandas`, `scipy`), machine learning models, and standard scripts directly into your TypeScript services without IPC or microservice latency.
 
-```python
-# model.py
-def predict(prompt: str) -> dict:
-    return {"reply": f"AI: {prompt}", "tokens": len(prompt.split())}
-```
-
-```typescript
-// server.ts
-import { get } from 'nio.js'
-import { predict } from './model.py'
-
-get('/ai', ({ query }) => {
-  return predict(query.prompt || 'hello')
-})
-```
-
-Build with the optional `python` feature:
-```bash
-cargo build --release --features python
-```
+📖 **[Read the Full Python Integration Guide](https://nio-labs.github.io/nio-js/python.html)** to learn how to write full Python code natively inside nio-js.
 
 ## Benchmark Highlights (Bare Metal)
 

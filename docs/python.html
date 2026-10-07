@@ -18,7 +18,7 @@
     <button class="hamburger-btn" id="menuToggle" aria-label="Toggle navigation">
       <span></span><span></span><span></span>
     </button>
-    <a href="#" class="brand-title">
+    <a href="index.html#" class="brand-title">
       <span class="brand-logo">⚡</span>
       <span class="brand-name">nio-js</span>
       <span class="badge">v0.2.0</span>
@@ -29,7 +29,7 @@
     <!-- Left Navigation Sidebar -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <a href="#" class="sidebar-brand">
+        <a href="index.html#" class="sidebar-brand">
           <span class="brand-logo">⚡</span>
           <div>
             <div class="brand-name">nio-js</div>
@@ -41,35 +41,35 @@
       <nav class="sidebar-nav">
         <div class="nav-section">
           <div class="nav-section-title">Getting Started</div>
-          <a href="#overview" class="nav-link active">1. Overview & Architecture</a>
-          <a href="#installation" class="nav-link">2. Installation & Quickstart</a>
-          <a href="#cli-reference" class="nav-link">3. CLI Command Reference</a>
+          <a href="index.html#overview" class="nav-link active">1. Overview & Architecture</a>
+          <a href="index.html#installation" class="nav-link">2. Installation & Quickstart</a>
+          <a href="index.html#cli-reference" class="nav-link">3. CLI Command Reference</a>
         </div>
 
         <div class="nav-section">
           <div class="nav-section-title">Worker Runtime API</div>
-          <a href="#route-registration" class="nav-link">4. Route Registration</a>
-          <a href="#request-response" class="nav-link">5. Requests, Responses & Status</a>
-          <a href="#url-params-queries" class="nav-link">6. Parameters & Query Strings</a>
-          <a href="#body-parsing" class="nav-link">7. Body Parsing (JSON / Uploads)</a>
+          <a href="index.html#route-registration" class="nav-link">4. Route Registration</a>
+          <a href="index.html#request-response" class="nav-link">5. Requests, Responses & Status</a>
+          <a href="index.html#url-params-queries" class="nav-link">6. Parameters & Query Strings</a>
+          <a href="index.html#body-parsing" class="nav-link">7. Body Parsing (JSON / Uploads)</a>
         </div>
 
         <div class="nav-section">
           <div class="nav-section-title">Hybrid Engine & AI</div>
-          <a href="#native-acceleration" class="nav-link">8. Native Acceleration (/** @native */)</a>
-          <a href="#multi-worker" class="nav-link">9. Multi-Core Worker Pinning</a>
+          <a href="index.html#native-acceleration" class="nav-link">8. Native Acceleration (/** @native */)</a>
+          <a href="index.html#multi-worker" class="nav-link">9. Multi-Core Worker Pinning</a>
           <a href="python.html" class="nav-link">10. In-Process Python Guide</a>
-          <a href="#benchmarks" class="nav-link">11. Bare-Metal Benchmarks</a>
+          <a href="index.html#benchmarks" class="nav-link">11. Bare-Metal Benchmarks</a>
         </div>
 
         <div class="nav-section">
           <div class="nav-section-title">Packaging & Ecosystem</div>
-          <a href="#dependencies" class="nav-link">12. Zero-Node Dependencies & Lockfiles</a>
-          <a href="#capsules" class="nav-link">13. Single-File Capsules (.njs)</a>
-          <a href="#agent-mcp" class="nav-link">14. Agent Diagnostics & Stdio MCP</a>
-          <a href="#real-world-examples" class="nav-link">15. Real-World Production Examples</a>
-          <a href="#roadmap" class="nav-link">16. Ecosystem Roadmap to v1.0.0</a>
-          <a href="#faq" class="nav-link">17. Security, Limits & FAQ</a>
+          <a href="index.html#dependencies" class="nav-link">12. Zero-Node Dependencies & Lockfiles</a>
+          <a href="index.html#capsules" class="nav-link">13. Single-File Capsules (.njs)</a>
+          <a href="index.html#agent-mcp" class="nav-link">14. Agent Diagnostics & Stdio MCP</a>
+          <a href="index.html#real-world-examples" class="nav-link">15. Real-World Production Examples</a>
+          <a href="index.html#roadmap" class="nav-link">16. Ecosystem Roadmap to v1.0.0</a>
+          <a href="index.html#faq" class="nav-link">17. Security, Limits & FAQ</a>
         </div>
 
       </nav>
@@ -395,7 +395,29 @@ nio-js run app.ts --port 3000 --workers 8</code></pre>
         </section>
 
         <!-- Section 10: In-Process Python AI -->
-        
+        <section id="python-ai" class="doc-section">
+          <h2>10. In-Process Python AI (PyO3)</h2>
+          <p>
+            Execute machine learning, data transforms, and Python algorithms in-process with <strong>zero IPC, zero sockets, and zero child processes</strong>:
+          </p>
+
+          <h3>1. Define Python Model (<code>kernel.py</code>)</h3>
+          <pre><code class="language-python">def classify(query: str) -> str:
+    q = query.lower()
+    if any(k in q for k in ["bug", "error", "crash", "fix"]):
+        return "debugging"
+    return "general_task"</code></pre>
+
+          <h3>2. Import & Execute in TypeScript (<code>server.ts</code>)</h3>
+          <pre><code class="language-typescript">import { get } from 'nio.js';
+import { classify } from './kernel.py';
+
+get('/classify', ({ query }) => {
+  const prompt = query.prompt || 'How do I fix this panic?';
+  const category = classify(prompt);
+  return { prompt, category };
+});</code></pre>
+        </section>
 
         <!-- Section 11: Benchmarks -->
         <section id="benchmarks" class="doc-section">
