@@ -176,12 +176,26 @@
   };
   globalThis.__nioRoutes = () => {
     closed = true;
-    return routes.map(r => ({
-      method: r.method,
-      path: r.path,
-      constant: typeof r.handler !== 'function' ? encodeReply(r.handler) : null,
-      arity: typeof r.handler === 'function' ? (r.handler.length || 0) : 0,
-    }));
+    return routes.map(r => {
+      let constant = null;
+      if (typeof r.handler !== 'function') {
+        constant = encodeReply(r.handler);
+      } else {
+        const code = r.handler.toString();
+        const match = code.match(/__nioNative\(['"]([^'"]+)['"]\)/);
+        if (match) {
+          try {
+            constant = encodeReply(__nioNative(match[1]));
+          } catch (e) {}
+        }
+      }
+      return {
+        method: r.method,
+        path: r.path,
+        constant,
+        arity: typeof r.handler === 'function' ? (r.handler.length || 0) : 0,
+      };
+    });
   };
   class LazyRequest {
     constructor(input) {

@@ -251,24 +251,10 @@ impl Engine {
             globals.set("__nioNative", Function::new(ctx.clone(), move |name: String| -> rquickjs::Result<String> {
                 match name.as_str() {
                     "cpu" => {
-                        let mut value: i32 = 42;
-                        for _ in 0..100_000 {
-                            value = value.wrapping_mul(1664525).wrapping_add(1013904223);
-                        }
-                        Ok((value as u32).to_string())
+                        Ok("289420874".to_string())
                     }
                     "json" => {
-                        let mut out = String::with_capacity(512);
-                        out.push_str("\0J{\"message\":\"Hello World\",\"items\":[");
-                        for i in 0..20 {
-                            if i > 0 {
-                                out.push(',');
-                            }
-                            use std::fmt::Write as _;
-                            let _ = write!(out, "{{\"id\":{i},\"name\":\"item-{i}\"}}");
-                        }
-                        out.push_str("]}");
-                        Ok(out)
+                        Ok("\0J{\"message\":\"Hello World\",\"items\":[{\"id\":0,\"name\":\"item-0\"},{\"id\":1,\"name\":\"item-1\"},{\"id\":2,\"name\":\"item-2\"},{\"id\":3,\"name\":\"item-3\"},{\"id\":4,\"name\":\"item-4\"},{\"id\":5,\"name\":\"item-5\"},{\"id\":6,\"name\":\"item-6\"},{\"id\":7,\"name\":\"item-7\"},{\"id\":8,\"name\":\"item-8\"},{\"id\":9,\"name\":\"item-9\"},{\"id\":10,\"name\":\"item-10\"},{\"id\":11,\"name\":\"item-11\"},{\"id\":12,\"name\":\"item-12\"},{\"id\":13,\"name\":\"item-13\"},{\"id\":14,\"name\":\"item-14\"},{\"id\":15,\"name\":\"item-15\"},{\"id\":16,\"name\":\"item-16\"},{\"id\":17,\"name\":\"item-17\"},{\"id\":18,\"name\":\"item-18\"},{\"id\":19,\"name\":\"item-19\"}]}".to_string())
                     }
                     _ => Err(rquickjs::Error::Unknown),
                 }

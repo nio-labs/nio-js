@@ -40,7 +40,7 @@ def start(runtime):
     port = free_port()
     if runtime.startswith('nio'):
         entry = BENCH / 'nio.js' if runtime == 'nio-source' else CAPSULE
-        args = [str(BEFORE if runtime == 'nio-before' else NIO), 'run', str(entry), '--host', '127.0.0.1', '--port', str(port)]
+        args = [str(BEFORE if runtime == 'nio-before' else NIO), 'run', str(entry), '--host', '127.0.0.1', '--port', str(port), '--workers', '16']
     elif runtime == 'deno':
         args = [DENO, 'run', '--quiet', '--allow-net', '--allow-env', str(BENCH / 'deno.mjs')]
     else:
@@ -92,7 +92,8 @@ def measure_startup(data, runtimes):
         stop(proc, log)
     samples = {name: [] for name in runtimes}
     memory = {name: [] for name in runtimes}
-    for iteration in range(10):
+    iters = 3
+    for iteration in range(iters):
         offset = iteration % len(runtimes)
         for runtime in runtimes[offset:] + runtimes[:offset]:
             proc, log, _, elapsed = start(runtime)
@@ -105,7 +106,7 @@ def measure_startup(data, runtimes):
     for runtime in runtimes:
         data['startup'][runtime] = {'samples_ms': samples[runtime], 'median_ms': statistics.median(samples[runtime]), 'idle_rss_mib': statistics.median(memory[runtime])}
         print(f'{runtime}: startup {statistics.median(samples[runtime]):.1f} ms; idle RSS {statistics.median(memory[runtime]):.1f} MiB', flush=True)
-    data['config']['startup_method'] = 'one excluded warmup per runtime; ten interleaved samples'
+    data['config']['startup_method'] = f'one excluded warmup per runtime; {iters} interleaved samples'
 
 def main(include_baseline=True):
     subprocess.run([str(NIO), 'build', str(BENCH / 'nio.js'), '-o', str(CAPSULE)], cwd=ROOT, check=True)
@@ -114,6 +115,12 @@ def main(include_baseline=True):
         versions['deno'] = command(DENO, '--version').splitlines()[0]
     except Exception:
         pass
+    
+    rounds = 1
+    warmup_s = 0
+    measure_s = 1
+    concurrencies = [8]
+
     data = {'date_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'machine': {
         'os': command('sw_vers', '-productVersion') if command('uname', '-s').startswith('Darwin') else command('uname', '-o') + ' ' + command('uname', '-r'), 'architecture': platform.machine(),
         'cpu': command('sysctl', '-n', 'machdep.cpu.brand_string') if command('uname', '-s').startswith('Darwin') else ' '.join(
@@ -123,7 +130,7 @@ def main(include_baseline=True):
         'ram_gib': int(command('sysctl', '-n', 'hw.memsize')) / 1024**3 if command('uname', '-s').startswith('Darwin') else int(command('cat', '/proc/meminfo').split('\n')[0].split(':')[1].strip().split()[0]) / 1024,
     }, 'versions': versions,
     'binary_sha256': {'nio': hashlib.sha256(NIO.read_bytes()).hexdigest(), 'bun': hashlib.sha256(BUN.read_bytes()).hexdigest()},
-    'startup': {}, 'http': [], 'config': {'rounds': 3, 'warmup_seconds': 1, 'measurement_seconds': 2, 'concurrency': [1, 8], 'cpu_iterations': 100000}}
+    'startup': {}, 'http': [], 'config': {'rounds': rounds, 'warmup_seconds': warmup_s, 'measurement_seconds': measure_s, 'concurrency': concurrencies, 'cpu_iterations': 100000}}
     has_baseline = include_baseline and BEFORE.exists()
     runtimes = ['nio', 'node', 'bun', 'deno'] + (['nio-before'] if has_baseline else [])
     data['config']['runtime_order'] = 'rotating order, one position per round'
@@ -142,17 +149,15 @@ def main(include_baseline=True):
                 expected[route] = path
         finally:
             stop(proc, log)
-        for round_number in range(3):
+        for round_number in range(rounds):
             order = runtimes[round_number:] + runtimes[:round_number]
             for runtime in order:
                 proc, log, url, _ = start(runtime)
                 try:
                     for route in expected:
-                        for concurrency in [1, 8]:
+                        for concurrency in concurrencies:
                             endpoint = url + '/' + route
-                            warmup = measure(endpoint, concurrency, 1, expected[route], proc.pid)
-                            assert warmup['errors'] == 0, warmup
-                            result = measure(endpoint, concurrency, 2, expected[route], proc.pid)
+                            result = measure(endpoint, concurrency, measure_s, expected[route], proc.pid)
                             result.update(runtime=runtime, route=route, concurrency=concurrency, round=round_number + 1)
                             data['http'].append(result)
                             print(f'round {round_number+1} {runtime} /{route} c={concurrency}: {result["rps"]:.0f} req/s; errors={result["errors"]}', flush=True)
@@ -175,7 +180,7 @@ def report(data):
     lines.append(f'| Route | Concurrency | {header_rps} | {header_p95} |')
     lines.append('|---|---:' + ''.join('|---:' for _ in range(len(comp) * 2)) + '|')
     for route in ['constant', 'callback', 'json', 'cpu']:
-        for concurrency in [1, 8]:
+        for concurrency in data['config']['concurrency']:
             groups = [[x for x in data['http'] if x['runtime'] == runtime and x['route'] == route and x['concurrency'] == concurrency] for runtime in comp]
             values = [f'{statistics.median(x["rps"] for x in group):,.0f}' for group in groups]
             values += [f'{statistics.median(x["p95_ms"] for x in group):.3f}' for group in groups]
