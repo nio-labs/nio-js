@@ -18,7 +18,12 @@ ROOT = Path(__file__).resolve().parent.parent
 BENCH = ROOT / 'benchmarks'
 NIO = ROOT / 'target/release/nio-js'
 BEFORE = BENCH / '.tools/nio-before'
-BUN = BENCH / '.tools/bun-linux-x64/bun'
+BUN_CANDIDATES = [
+    BENCH / '.tools/bun-darwin-aarch64/bun',
+    BENCH / '.tools/bun-linux-x64/bun',
+    BENCH / '.tools/bun',
+]
+BUN = next((p for p in BUN_CANDIDATES if p.exists()), BENCH / '.tools/bun-linux-x64/bun')
 DENO = BENCH / '.tools/deno-linux-x64'
 DENO = str(DENO) if DENO.exists() else 'deno'
 LOAD = BENCH / 'loadgen/target/release/nio-bench-loadgen'

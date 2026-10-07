@@ -1,6 +1,6 @@
 {
   "name": "@nio-labs/nio-js",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "The hybrid, agent-native worker runtime: TypeScript APIs, native Rust acceleration, in-process Python AI, and portable .njs capsules",
   "license": "MIT",
   "type": "module",
@@ -18,12 +18,12 @@
     "package:platform": "node scripts/package-platform.cjs"
   },
   "optionalDependencies": {
-    "@nio-labs/nio-js-android-arm64": "0.2.6",
-    "@nio-labs/nio-js-darwin-arm64": "0.2.6",
-    "@nio-labs/nio-js-darwin-x64": "0.2.6",
-    "@nio-labs/nio-js-linux-arm64": "0.2.6",
-    "@nio-labs/nio-js-linux-x64": "0.2.6",
-    "@nio-labs/nio-js-win32-x64": "0.2.6"
+    "@nio-labs/nio-js-android-arm64": "0.2.7",
+    "@nio-labs/nio-js-darwin-arm64": "0.2.7",
+    "@nio-labs/nio-js-darwin-x64": "0.2.7",
+    "@nio-labs/nio-js-linux-arm64": "0.2.7",
+    "@nio-labs/nio-js-linux-x64": "0.2.7",
+    "@nio-labs/nio-js-win32-x64": "0.2.7"
   },
   "publishConfig": { "access": "public" }
 }

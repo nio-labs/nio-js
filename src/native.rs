@@ -457,7 +457,7 @@ struct Emit<'a, 'b> {
     vars: Vec<Variable>,
     state: ir::Value,
     tick: ir::FuncRef,
-    bits: ir::FuncRef,
+    _bits: ir::FuncRef,
     rem: ir::FuncRef,
     loops: Vec<(ir::Block, ir::Block)>,
     budget: &'b mut usize,
@@ -477,7 +477,69 @@ impl Emit<'_, '_> {
     fn truth(&mut self, value: ir::Value) -> ir::Value {
         let zero = self.b.ins().f64const(0.0);
         // Ordered nonzero: NaN is false, as in JavaScript.
-        self.b.ins().fcmp(FloatCC::OrderedNotEqual, value, zero)
+        let lt = self.b.ins().fcmp(FloatCC::LessThan, value, zero);
+        let gt = self.b.ins().fcmp(FloatCC::GreaterThan, value, zero);
+        self.b.ins().bor(lt, gt)
+    }
+    fn expr_i32(&mut self, e: &Expr, depth: usize) -> Result<ir::Value> {
+        self.spend()?;
+        ensure!(depth < 64, "native expression too deep");
+        Ok(match e {
+            Expr::Number(n) => {
+                let i = (*n as i64) as i32;
+                self.b.ins().iconst(types::I32, i as i64)
+            }
+            Expr::Binary(op, a, b) => match op.as_str() {
+                "|" => {
+                    let ai = self.expr_i32(a, depth + 1)?;
+                    let bi = self.expr_i32(b, depth + 1)?;
+                    self.b.ins().bor(ai, bi)
+                }
+                "&" => {
+                    let ai = self.expr_i32(a, depth + 1)?;
+                    let bi = self.expr_i32(b, depth + 1)?;
+                    self.b.ins().band(ai, bi)
+                }
+                "^" => {
+                    let ai = self.expr_i32(a, depth + 1)?;
+                    let bi = self.expr_i32(b, depth + 1)?;
+                    self.b.ins().bxor(ai, bi)
+                }
+                "<<" => {
+                    let ai = self.expr_i32(a, depth + 1)?;
+                    let bi = self.expr_i32(b, depth + 1)?;
+                    let shift = self.b.ins().band_imm(bi, 31);
+                    self.b.ins().ishl(ai, shift)
+                }
+                ">>" => {
+                    let ai = self.expr_i32(a, depth + 1)?;
+                    let bi = self.expr_i32(b, depth + 1)?;
+                    let shift = self.b.ins().band_imm(bi, 31);
+                    self.b.ins().sshr(ai, shift)
+                }
+                ">>>" => {
+                    let ai = self.expr_i32(a, depth + 1)?;
+                    let bi = self.expr_i32(b, depth + 1)?;
+                    let shift = self.b.ins().band_imm(bi, 31);
+                    self.b.ins().ushr(ai, shift)
+                }
+                "imul" => {
+                    let ai = self.expr_i32(a, depth + 1)?;
+                    let bi = self.expr_i32(b, depth + 1)?;
+                    self.b.ins().imul(ai, bi)
+                }
+                _ => {
+                    let f = self.expr(e, depth)?;
+                    let i64_val = self.b.ins().fcvt_to_sint_sat(types::I64, f);
+                    self.b.ins().ireduce(types::I32, i64_val)
+                }
+            },
+            _ => {
+                let f = self.expr(e, depth)?;
+                let i64_val = self.b.ins().fcvt_to_sint_sat(types::I64, f);
+                self.b.ins().ireduce(types::I32, i64_val)
+            }
+        })
     }
     fn expr(&mut self, e: &Expr, depth: usize) -> Result<ir::Value> {
         self.spend()?;
@@ -505,41 +567,83 @@ impl Emit<'_, '_> {
                     "trunc" => self.b.ins().trunc(v),
                     "abs" => self.b.ins().fabs(v),
                     "~" => {
-                        let minus = self.b.ins().f64const(-1.0);
-                        let op = self.b.ins().iconst(types::I32, 2);
-                        let call = self.b.ins().call(self.bits, &[v, minus, op]);
-                        self.b.inst_results(call)[0]
+                        let v64 = self.b.ins().fcvt_to_sint_sat(types::I64, v);
+                        let vi = self.b.ins().ireduce(types::I32, v64);
+                        let not_v = self.b.ins().bnot(vi);
+                        self.b.ins().fcvt_from_sint(types::F64, not_v)
                     }
                     _ => bail!("invalid native unary operator"),
                 }
             }
             Expr::Binary(op, a, b) => {
-                let a = self.expr(a, depth + 1)?;
-                let b = self.expr(b, depth + 1)?;
                 match op.as_str() {
-                    "+" => self.b.ins().fadd(a, b),
-                    "-" => self.b.ins().fsub(a, b),
-                    "*" => self.b.ins().fmul(a, b),
-                    "/" => self.b.ins().fdiv(a, b),
+                    "+" => {
+                        let av = self.expr(a, depth + 1)?;
+                        let bv = self.expr(b, depth + 1)?;
+                        self.b.ins().fadd(av, bv)
+                    }
+                    "-" => {
+                        let av = self.expr(a, depth + 1)?;
+                        let bv = self.expr(b, depth + 1)?;
+                        self.b.ins().fsub(av, bv)
+                    }
+                    "*" => {
+                        let av = self.expr(a, depth + 1)?;
+                        let bv = self.expr(b, depth + 1)?;
+                        self.b.ins().fmul(av, bv)
+                    }
+                    "/" => {
+                        let av = self.expr(a, depth + 1)?;
+                        let bv = self.expr(b, depth + 1)?;
+                        self.b.ins().fdiv(av, bv)
+                    }
                     "%" => {
-                        let call = self.b.ins().call(self.rem, &[a, b]);
+                        let av = self.expr(a, depth + 1)?;
+                        let bv = self.expr(b, depth + 1)?;
+                        let call = self.b.ins().call(self.rem, &[av, bv]);
                         self.b.inst_results(call)[0]
                     }
                     "|" | "&" | "^" | "<<" | ">>" | ">>>" | "imul" => {
-                        let code = match op.as_str() {
-                            "|" => 0,
-                            "&" => 1,
-                            "^" => 2,
-                            "<<" => 3,
-                            ">>" => 4,
-                            "imul" => 6,
-                            _ => 5,
-                        };
-                        let code = self.b.ins().iconst(types::I32, code);
-                        let call = self.b.ins().call(self.bits, &[a, b, code]);
-                        self.b.inst_results(call)[0]
+                        let ai = self.expr_i32(a, depth + 1)?;
+                        let bi = self.expr_i32(b, depth + 1)?;
+                        match op.as_str() {
+                            "|" => {
+                                let r = self.b.ins().bor(ai, bi);
+                                self.b.ins().fcvt_from_sint(types::F64, r)
+                            }
+                            "&" => {
+                                let r = self.b.ins().band(ai, bi);
+                                self.b.ins().fcvt_from_sint(types::F64, r)
+                            }
+                            "^" => {
+                                let r = self.b.ins().bxor(ai, bi);
+                                self.b.ins().fcvt_from_sint(types::F64, r)
+                            }
+                            "<<" => {
+                                let shift = self.b.ins().band_imm(bi, 31);
+                                let r = self.b.ins().ishl(ai, shift);
+                                self.b.ins().fcvt_from_sint(types::F64, r)
+                            }
+                            ">>" => {
+                                let shift = self.b.ins().band_imm(bi, 31);
+                                let r = self.b.ins().sshr(ai, shift);
+                                self.b.ins().fcvt_from_sint(types::F64, r)
+                            }
+                            ">>>" => {
+                                let shift = self.b.ins().band_imm(bi, 31);
+                                let u_res = self.b.ins().ushr(ai, shift);
+                                self.b.ins().fcvt_from_uint(types::F64, u_res)
+                            }
+                            "imul" => {
+                                let r = self.b.ins().imul(ai, bi);
+                                self.b.ins().fcvt_from_sint(types::F64, r)
+                            }
+                            _ => bail!("invalid native binary operator"),
+                        }
                     }
                     "<" | "<=" | ">" | ">=" | "==" | "===" | "!=" | "!==" => {
+                        let av = self.expr(a, depth + 1)?;
+                        let bv = self.expr(b, depth + 1)?;
                         let cc = match op.as_str() {
                             "<" => FloatCC::LessThan,
                             "<=" => FloatCC::LessThanOrEqual,
@@ -548,7 +652,7 @@ impl Emit<'_, '_> {
                             "==" | "===" => FloatCC::Equal,
                             _ => FloatCC::NotEqual,
                         };
-                        let test = self.b.ins().fcmp(cc, a, b);
+                        let test = self.b.ins().fcmp(cc, av, bv);
                         self.b.ins().fcvt_from_uint(types::F64, test)
                     }
                     _ => bail!("invalid native binary operator"),
@@ -711,7 +815,7 @@ impl Executable {
             vars,
             state,
             tick,
-            bits,
+            _bits: bits,
             rem,
             loops: vec![],
             budget: &mut budget,
