@@ -1,4 +1,4 @@
-# The Complete Guide to nio-js
+# The Complete Guide to NioJS
 
 > **The Hybrid, Agent-Native Worker Runtime**  
 > Sub-millisecond boot · Native Rust offloading · In-process Python AI · Zero-dependency capsules
@@ -36,7 +36,7 @@
 
 Traditional JavaScript runtimes (Node.js, Deno, Bun) were designed for full server applications with deep dependency graphs, heavy garbage collection cycles, and hundreds of megabytes in `node_modules`.
 
-`nio-js` takes a fundamentally different approach:
+`NioJS` takes a fundamentally different approach:
 - **Engine**: Embedded [QuickJS](https://bellard.org/quickjs/) running inside a multi-worker **Rust host** (built with Tokio & Hyper).
 - **Sub-Millisecond Cold Starts**: Services boot in **< 1 ms** with under **15 MB** memory baseline.
 - **Hybrid Compute**: Lightweight JS controls routing and business logic, while computationally intensive tasks are compiled or offloaded directly to **Rust** or **in-process CPython**.
@@ -44,7 +44,7 @@ Traditional JavaScript runtimes (Node.js, Deno, Bun) were designed for full serv
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│                   nio-js Host (Rust)                   │
+│                   NioJS Host (Rust)                   │
 │                                                        │
 │  ┌─────────────────┐  ┌──────────────────────────────┐ │
 │  │ Tokio HTTP Core │  │  Multi-Worker Thread Pool    │ │
@@ -129,7 +129,7 @@ Supported HTTP verbs include `get`, `post`, `put`, `del`, `patch`, `head`, and `
 import { get, post, del, reply } from 'nio.js';
 
 // 1. Constant static route (zero-JS execution, served directly from Rust host)
-get('/', 'Welcome to nio-js');
+get('/', 'Welcome to NioJS');
 
 // 2. Dynamic synchronous handler
 get('/health', () => ({ status: 'ok', timestamp: Date.now() }));
@@ -233,11 +233,11 @@ post('/api/upload', async ({ formData }) => {
 
 ## 5. Hybrid Performance & Native Acceleration
 
-`nio-js` is engineered for speed. For CPU-bound tasks, developers can escape JavaScript interpreted overhead completely.
+`NioJS` is engineered for speed. For CPU-bound tasks, developers can escape JavaScript interpreted overhead completely.
 
 ### The `/** @native */` Directive
 
-Prefix any compute-heavy function with `/** @native */`. `nio-js` automatically recognizes the directive and executes the logic via optimized native host paths:
+Prefix any compute-heavy function with `/** @native */`. `NioJS` automatically recognizes the directive and executes the logic via optimized native host paths:
 
 ```typescript
 import { get } from 'nio.js';
@@ -279,7 +279,7 @@ Each worker runs its own isolated QuickJS runtime instance sharing the same port
 
 Measured on bare-metal Apple Silicon (macOS ARM64, 8-core CPU) across 3 reproducible rounds with warm filesystem caches against Node.js, Bun, and Deno:
 
-| Criterion | nio-js | Bun | Node | Deno | Verdict |
+| Criterion | NioJS | Bun | Node | Deno | Verdict |
 |:---|:---|:---|:---|:---|:---|
 | **Startup** | **8.15 ms** *(Zero Python overhead)* | 13.53 ms | 59.92 ms | 22.35 ms | 🏆 **Clear Win** (Fastest cold start) |
 | **Idle RSS** | **8.75 MiB** *(Python unallocated)* | 13.48 MiB | 46.84 MiB | 34.58 MiB | 🏆 **Clear Win** (Lowest memory footprint) |
@@ -296,7 +296,7 @@ Measured on bare-metal Apple Silicon (macOS ARM64, 8-core CPU) across 3 reproduc
 
 
 Need Python for machine learning, data science, or Hugging Face pipelines?  
-`nio-js` integrates **CPython directly in-process via PyO3**. No REST endpoints, no subprocess pipes, and zero network serialization latency.
+`NioJS` integrates **CPython directly in-process via PyO3**. No REST endpoints, no subprocess pipes, and zero network serialization latency.
 
 ### 1. Write the Python Module (`classifier.py`)
 ```python
@@ -328,7 +328,7 @@ nio-js run server.ts --port 3000
 
 ## 7. Dependencies Without `node_modules`
 
-`nio-js` eliminates the `node_modules` directory and npm install step. Dependencies are fetched directly over HTTPS from CDNs and pinned with cryptographic SHA-256 digests.
+`NioJS` eliminates the `node_modules` directory and npm install step. Dependencies are fetched directly over HTTPS from CDNs and pinned with cryptographic SHA-256 digests.
 
 ### HTTPS & CDN Imports
 
@@ -349,7 +349,7 @@ get('/validate', ({ query }) => {
 
 ### Offline Lockfiles (`nio.lock`)
 
-During build or the initial run, `nio-js` generates an immutable `nio.lock`:
+During build or the initial run, `NioJS` generates an immutable `nio.lock`:
 
 ```bash
 # Update dependencies and regenerate lockfile
@@ -410,7 +410,7 @@ get('/logo', asset('banner.png'));
 
 ## 9. Agent-Native Tooling & MCP Server
 
-`nio-js` was built ground-up for autonomous AI coding agents (such as Antigravity, Claude, Cursor, and Nio).
+`NioJS` was built ground-up for autonomous AI coding agents (such as Antigravity, Claude, Cursor, and Nio).
 
 ### Structured Diagnostics (`nio-js check`)
 
@@ -439,7 +439,7 @@ Example agent output:
 
 ### Model Context Protocol (`nio-js mcp`)
 
-Run `nio-js` as a persistent **stdio MCP Server** to give LLMs native execution and inspection tools:
+Run `NioJS` as a persistent **stdio MCP Server** to give LLMs native execution and inspection tools:
 
 ```bash
 nio-js mcp
@@ -453,7 +453,7 @@ nio-js mcp
 
 ## 10. Security, Permissions, & Limits
 
-`nio-js` enforces strict execution limits to safeguard microservices:
+`NioJS` enforces strict execution limits to safeguard microservices:
 
 | Constraint | Default Value | Flag / Config |
 |---|---|---|
@@ -469,7 +469,7 @@ nio-js mcp
 ### Q: Why do I get `Registration is closed`?
 **A:** Routes must be registered synchronously during entry module evaluation. Calling `get()` or `post()` inside an async timer (`setTimeout`) or inside another route handler is not allowed.
 
-### Q: Does `nio-js` run standard npm packages?
+### Q: Does `NioJS` run standard npm packages?
 **A:** Yes! Any modern ES Module published on npm can be imported via `https://esm.sh/<package>` or `https://unpkg.com/<package>`. Packages depending on Node.js-specific C++ addons or deprecated CommonJS globals should use modern ESM equivalents.
 
 ### Q: How do I test my service?

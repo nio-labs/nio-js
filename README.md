@@ -1,4 +1,4 @@
-# nio-js
+# NioJS
 
 The Hybrid, Agent-Native Worker Runtime. A compact JavaScript, TypeScript, and Python service runtime with portable `.njs` capsules, native Rust acceleration, and first-class Model Context Protocol (MCP) agent tooling.
 
@@ -9,7 +9,7 @@ get('/', 'Hello World')
 
 The engine is embedded through `rquickjs` 0.14 (QuickJS-NG) coupled with a multi-worker Rust host, native loop offloading, and optional in-process Python AI execution. Node and npm are not needed to build or execute this project.
 
-📖 **[Read the Complete Guide to nio-js](GUIDE.md)** *(or browse online at [nio-labs.github.io/nio-js](https://nio-labs.github.io/nio-js/))* for detailed architecture, API reference, native acceleration, and deployment patterns.
+📖 **[Read the Complete Guide to NioJS](GUIDE.md)** *(or browse online at [nio-labs.github.io/nio-js](https://nio-labs.github.io/nio-js/))* for detailed architecture, API reference, native acceleration, and deployment patterns.
 
 ## Run
 
@@ -244,7 +244,7 @@ The QuickJS budget does not include every host allocation. Host buffers have exp
 
 ## Agent-Native Tooling & MCP Server
 
-`nio-js` is built with first-class capabilities for AI coding agents and autonomous workflows:
+`NioJS` is built with first-class capabilities for AI coding agents and autonomous workflows:
 
 ### Fast Diagnostics (`nio-js check`)
 
@@ -260,7 +260,7 @@ nio-js check src/app.ts
 
 ### Stdio Model Context Protocol (MCP) Server
 
-Run `nio-js` as an MCP server to equip agents (Claude Desktop, Cursor, Antigravity, etc.) with compile and eval tools:
+Run `NioJS` as an MCP server to equip agents (Claude Desktop, Cursor, Antigravity, etc.) with compile and eval tools:
 
 ```bash
 nio-js mcp
@@ -289,13 +289,13 @@ Multi-worker servers also automatically detect physical CPU topologies and pin w
 
 Integrate standard Python libraries (`pandas`, `scipy`), machine learning models, and standard scripts directly into your TypeScript services without IPC or microservice latency.
 
-📖 **[Read the Full Python Integration Guide](https://nio-labs.github.io/nio-js/python.html)** to learn how to write full Python code natively inside nio-js.
+📖 **[Read the Full Python Integration Guide](https://nio-labs.github.io/nio-js/python.html)** to learn how to write full Python code natively inside NioJS.
 
 ## Benchmark Highlights (Bare Metal)
 
 Measured on WSL2 Linux (Intel Core Ultra 5 135H) using 1-round "quick" methodology without warmup:
 
-| Criterion | nio-js | Bun | Node | Deno | Verdict |
+| Criterion | NioJS | Bun | Node | Deno | Verdict |
 |:---|:---|:---|:---|:---|:---|
 | **Startup** | **13.32 ms** *(Zero Python overhead)* | 25.08 ms | 54.27 ms | 24.99 ms | 🏆 **Clear Win** (Fastest cold start) |
 | **Idle RSS** | **14.38 MiB** *(Python unallocated)* | 19.25 MiB | 60.44 MiB | 47.16 MiB | 🏆 **Clear Win** (Lowest memory footprint) |
@@ -328,7 +328,7 @@ Only macOS ARM64 has been exercised in this workspace. Linux, Windows, Termux, a
 
 ## Scope & Roadmap
 
-`nio-js` is evolving towards its v1.0.0 General Availability release, featuring deep native integration with **`nio`** (AI agent & tool bus) and **`nio-db`** (durable database & SSE events).
+`NioJS` is evolving towards its v1.0.0 General Availability release, featuring deep native integration with **`nio`** (AI agent & tool bus) and **`nio-db`** (durable database & SSE events).
 
 For the complete milestone timeline, feature breakdown, and architecture design across the Nio ecosystem, see **[ROADMAP_V1.md](ROADMAP_V1.md)**.
 
