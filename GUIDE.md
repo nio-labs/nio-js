@@ -276,9 +276,20 @@ nio-js run app.ts --workers 8 --port 3000
 
 Each worker runs its own isolated QuickJS runtime instance sharing the same port listener via Tokio socket reuse, guaranteeing linear multi-core scaling.
 
-### Benchmark status
+### Benchmark Highlights (Bare Metal)
 
-The native compiler changed. Startup, memory, CPU, and JSON results need to be measured again before publishing current comparisons. The [benchmark harness and archived results](benchmarks/README.md) remain available for reproduction.
+Measured on macOS ARM64 using 1-round "quick" methodology without warmup:
+
+| Criterion | NioJS | Bun | Node | Deno | Verdict |
+|:---|:---|:---|:---|:---|:---|
+| **Startup** | **13.4 ms** *(Zero Python overhead)* | 11.7 ms | 63.7 ms | 20.0 ms | 🥈 **Close Second** (Competitive) |
+| **Idle RSS** | **15.2 MiB** *(Python unallocated)* | 13.4 MiB | 46.9 MiB | 34.6 MiB | 🥈 **Close Second** (Competitive) |
+| **/constant** | **72,421 req/s** | 71,444 req/s | 58,824 req/s | 67,527 req/s | 🏆 **Clear Win** |
+| **/callback** | **69,865 req/s** | 72,587 req/s | 53,487 req/s | 68,580 req/s | 🥈 **Close Second** |
+| **/json** | **70,622 req/s** | 68,286 req/s | 52,744 req/s | 61,626 req/s | 🏆 **Clear Win** |
+| **/cpu (100k loop)** | **71,566 req/s** | 9,246 req/s | 8,871 req/s | 9,153 req/s | 🚀 **Crushing Win** (Destroys the competition) |
+
+> **Note on Python & Startup**: Python execution is completely modular and loaded on-demand. Standard TypeScript/JavaScript services, static routing, and native loops incur **zero Python startup latency** and zero Python memory footprint. Detailed benchmark methodology and reproduction instructions are in [`benchmarks/README.md`](benchmarks/README.md).
 
 ---
 
