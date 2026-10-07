@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>nio-js Docs — The Hybrid, Agent-Native Worker Runtime</title>
+  <title>NioJS Docs — The Hybrid, Agent-Native Worker Runtime</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Code:ital,wght@0,400..700;1,400..700&family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -20,7 +20,7 @@
     </button>
     <a href="index.html#" class="brand-title">
       <span class="brand-logo">⚡</span>
-      <span class="brand-name">nio-js</span>
+      <span class="brand-name">NioJS</span>
       <span class="badge">v0.2.0</span>
     </a>
   </header>
@@ -32,7 +32,7 @@
         <a href="index.html#" class="sidebar-brand">
           <span class="brand-logo">⚡</span>
           <div>
-            <div class="brand-name">nio-js</div>
+            <div class="brand-name">NioJS</div>
             <div class="brand-sub">Agent-Native Worker Runtime</div>
           </div>
         </a>
@@ -92,14 +92,14 @@
         <section id="native-guide" class="doc-section active-section">
           <h1>Native Acceleration Guide</h1>
           <p class="lead">
-            <strong>nio-js</strong> achieves its incredible performance through <strong>Hybrid Execution</strong>. 
+            <strong>NioJS</strong> achieves its incredible performance through <strong>Hybrid Execution</strong>. 
             By combining lightweight QuickJS for fast startup and business logic with pre-compiled <strong>Rust</strong> for heavy lifting, you get the best of both worlds.
           </p>
 
           <h2>The Problem: Interpreters vs JITs</h2>
           <p>
             Standard V8-based runtimes like Node.js and Bun use heavy Just-In-Time (JIT) compilers. While fast at peak, JITs consume massive amounts of idle memory and suffer from "warm-up" delays. 
-            <code>nio-js</code> uses QuickJS, an interpreter that starts in ~13ms and uses just 14MiB of memory. However, pure interpreted JavaScript can be slow for heavy CPU loops.
+            NioJS uses QuickJS, an interpreter that starts in ~13ms and uses just 14MiB of memory. However, pure interpreted JavaScript can be slow for heavy CPU loops.
           </p>
           <p>
             <strong>The Solution:</strong> Bypass JavaScript entirely for hot paths.
@@ -107,12 +107,12 @@
 
           <h2>How <code>/** @native */</code> Works</h2>
           <p>
-            When you build an application, the `nio-js` Oxc parser scans your TypeScript for the <code>/** @native */</code> JSDoc directive.
+            When you build an application, the NioJS Oxc parser scans your TypeScript for the <code>/** @native */</code> JSDoc directive.
           </p>
           <ol>
             <li><strong>Build-Time AST Transformation:</strong> The parser strips the JavaScript implementation and replaces it with a binding to the Rust host environment (<code>__nioNative</code>).</li>
             <li><strong>Runtime Execution:</strong> Calling the function invokes native, optimized Rust machine code instead of interpreting JS bytecodes.</li>
-            <li><strong>Zero-Overhead Routing:</strong> If a native function returns static content (like a JSON payload), the `nio-js` bootstrapper evaluates it exactly once during startup and loads the raw bytes directly into the Rust HTTP router cache.</li>
+            <li><strong>Zero-Overhead Routing:</strong> If a native function returns static content (like a JSON payload), the NioJS bootstrapper evaluates it exactly once during startup and loads the raw bytes directly into the Rust HTTP router cache.</li>
           </ol>
           <p>This means your hot routes <strong>never enter the JavaScript engine at all</strong>.</p>
 
@@ -123,7 +123,7 @@
 /** @native */
 function cpuIntensiveTask(): string {
   // In development, this fallback runs.
-  // In production, nio-js intercepts this and runs the Rust-optimized equivalent!
+  // In production, NioJS intercepts this and runs the Rust-optimized equivalent!
   let value = 42;
   for (let i = 0; i < 100_000; i++) {
     value = (value * 1664525 + 1013904223) | 0;
@@ -148,7 +148,7 @@ get('/json', generateLargePayload());
 </code></pre>
 
           <h2>Crushing the Benchmarks</h2>
-          <p>Because of native offloading and static router caching, <code>nio-js</code> completely destroys traditional JIT runtimes in bare-metal benchmarks (WSL2 Linux, Intel Core Ultra 5):</p>
+          <p>Because of native offloading and static router caching, NioJS completely destroys traditional JIT runtimes in bare-metal benchmarks (WSL2 Linux, Intel Core Ultra 5):</p>
           
           <table style="width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 2rem; font-size: 0.95rem;">
             <thead>
@@ -160,7 +160,7 @@ get('/json', generateLargePayload());
             </thead>
             <tbody>
               <tr style="border-bottom: 1px solid var(--border-color); font-weight: 600;">
-                <td style="padding: 10px;">nio-js (Native)</td>
+                <td style="padding: 10px;">NioJS (Native)</td>
                 <td style="padding: 10px; color: #10b981;">15,016 🚀</td>
                 <td style="padding: 10px; color: #10b981;">14,389 🚀</td>
               </tr>

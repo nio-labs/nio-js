@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>nio-js Docs — The Hybrid, Agent-Native Worker Runtime</title>
+  <title>NioJS Docs — The Hybrid, Agent-Native Worker Runtime</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Code:ital,wght@0,400..700;1,400..700&family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -20,7 +20,7 @@
     </button>
     <a href="index.html#" class="brand-title">
       <span class="brand-logo">⚡</span>
-      <span class="brand-name">nio-js</span>
+      <span class="brand-name">NioJS</span>
       <span class="badge">v0.2.0</span>
     </a>
   </header>
@@ -32,7 +32,7 @@
         <a href="index.html#" class="sidebar-brand">
           <span class="brand-logo">⚡</span>
           <div>
-            <div class="brand-name">nio-js</div>
+            <div class="brand-name">NioJS</div>
             <div class="brand-sub">Agent-Native Worker Runtime</div>
           </div>
         </a>
@@ -91,7 +91,7 @@
         <section id="python-guide" class="doc-section active-section">
           <h1>Python Integration Guide</h1>
           <p class="lead">
-            <strong>nio-js</strong> embeds a complete, authentic CPython runtime directly into the engine via <strong>PyO3</strong>. 
+            <strong>NioJS</strong> embeds a complete, authentic CPython runtime directly into the engine via <strong>PyO3</strong>. 
             Write standard Python scripts, utilize the rich ML ecosystem, or connect to Python-only databases—all running natively inside your TypeScript service without IPC overhead.
           </p>
 
@@ -100,7 +100,7 @@
             Traditional approaches to using Python from Node/TypeScript involve HTTP microservices or spawning child processes. Both introduce serialization overhead, socket latency, and complex deployment topologies.
           </p>
           <p>
-            By embedding CPython natively in the Rust host, <code>nio-js</code> bridges the gap. JavaScript handles the async web routing, JSON orchestration, and I/O, while Python handles heavy data processing, machine learning, and legacy library execution in exactly the same memory space.
+            By embedding CPython natively in the Rust host, NioJS bridges the gap. JavaScript handles the async web routing, JSON orchestration, and I/O, while Python handles heavy data processing, machine learning, and legacy library execution in exactly the same memory space.
           </p>
 
           <h2>Not Just for AI</h2>
@@ -151,7 +151,7 @@ post('/analyze', async ({ json }) => {
 
           <h2>Running Your Project</h2>
           <p>
-            Running a Python-integrated project is identical to running a standard <code>nio-js</code> application. The CPython runtime is automatically initialized on demand within the exact same process space.
+            Running a Python-integrated project is identical to running a standard NioJS application. The CPython runtime is automatically initialized on demand within the exact same process space.
           </p>
           <ol>
             <li>
@@ -159,7 +159,7 @@ post('/analyze', async ({ json }) => {
               <pre><code class="language-bash">pip install pandas</code></pre>
             </li>
             <li>
-              <p>Run your TypeScript application directly using the <code>nio-js</code> CLI:</p>
+              <p>Run your TypeScript application directly using the NioJS CLI:</p>
               <pre><code class="language-bash">nio-js run server.ts --port 3000</code></pre>
             </li>
             <li>
@@ -174,15 +174,15 @@ post('/analyze', async ({ json }) => {
           <p>
             The boundary between the QuickJS JavaScript engine and the PyO3 Python engine currently relies on <strong>String serialization</strong>.
             When calling a Python function, arguments should be passed as JSON strings, and the Python function should return a JSON string. 
-            <code>nio-js</code> does this automatically for you via the proxy wrapper, ensuring type safety and memory isolation between the two language garbage collectors.
+            NioJS does this automatically for you via the proxy wrapper, ensuring type safety and memory isolation between the two language garbage collectors.
           </p>
 
           <h2>Concurrency and Blocking</h2>
           <div class="alert alert-warning" style="background:#fff3cd; color:#856404; padding:15px; border-radius:4px; margin-bottom:20px;">
-            <strong>Important:</strong> The Python runtime (GIL) and PyO3 execution run <strong>synchronously</strong> within the current <code>nio-js</code> worker thread.
+            <strong>Important:</strong> The Python runtime (GIL) and PyO3 execution run <strong>synchronously</strong> within the current NioJS worker thread.
           </div>
           <p>
-            While <code>nio-js</code> uses a multi-worker QuickJS thread pool, executing a heavy Python function blocks the specific worker handling that request until the Python function returns. For high-concurrency web traffic, prefer short-lived Python tasks (like quick inferences or data transformations).
+            While NioJS uses a multi-worker QuickJS thread pool, executing a heavy Python function blocks the specific worker handling that request until the Python function returns. For high-concurrency web traffic, prefer short-lived Python tasks (like quick inferences or data transformations).
           </p>
           
           <h2>Installation & Requirements</h2>

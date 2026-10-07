@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>nio-js Docs — The Hybrid, Agent-Native Worker Runtime</title>
+  <title>NioJS Docs — The Hybrid, Agent-Native Worker Runtime</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Code:ital,wght@0,400..700;1,400..700&family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -20,7 +20,7 @@
     </button>
     <a href="#" class="brand-title">
       <span class="brand-logo">⚡</span>
-      <span class="brand-name">nio-js</span>
+      <span class="brand-name">NioJS</span>
       <span class="badge">v0.2.0</span>
     </a>
   </header>
@@ -32,7 +32,7 @@
         <a href="#" class="sidebar-brand">
           <span class="brand-logo">⚡</span>
           <div>
-            <div class="brand-name">nio-js</div>
+            <div class="brand-name">NioJS</div>
             <div class="brand-sub">Agent-Native Worker Runtime</div>
           </div>
         </a>
@@ -108,7 +108,7 @@
             Traditional runtimes (Node.js, Deno, Bun) are designed for heavy server runtimes with deep dependency graphs, long startup times, and hundreds of megabytes of <code>node_modules</code>.
           </p>
           <p>
-            <strong>nio-js</strong> reimagines workers for the AI agent era:
+            <strong>NioJS</strong> reimagines workers for the AI agent era:
           </p>
           <ul>
             <li><strong>Engine Core</strong>: Embedded QuickJS-NG (<code>rquickjs</code> 0.14) inside an asynchronous multi-threaded <strong>Tokio / Hyper Rust host</strong>.</li>
@@ -120,7 +120,7 @@
 
           <div class="architecture-diagram">
             <pre><code>┌────────────────────────────────────────────────────────────────────────┐
-│                          nio-js Host (Rust)                            │
+│                          NioJS Host (Rust)                            │
 │                                                                        │
 │  ┌───────────────────────┐          ┌───────────────────────────────┐  │
 │  │    Tokio HTTP Core    │          │   Multi-Worker Thread Pool    │  │
@@ -225,7 +225,7 @@ sudo install -m 755 target/release/nio-js /usr/local/bin/nio-js</code></pre>
           <pre><code class="language-typescript">import { get, post, del } from 'nio.js';
 
 // 1. Zero-JS constant route: evaluated once, served instantly from Rust host
-get('/', 'Hello from nio-js!');
+get('/', 'Hello from NioJS!');
 
 // 2. Synchronous handler
 get('/health', () => ({ status: 'ok', uptime: 104 }));
@@ -527,7 +527,7 @@ nio-js run dist/app.njs --port 8080</code></pre>
         <section id="roadmap" class="doc-section">
           <h2>16. Ecosystem Roadmap to v1.0.0</h2>
           <p>
-            <code>nio-js</code> is engineered to operate seamlessly as the execution tier of the wider Nio platform:
+            NioJS is engineered to operate seamlessly as the execution tier of the wider Nio platform:
           </p>
           <div class="table-container">
             <table>
@@ -562,7 +562,7 @@ nio-js run dist/app.njs --port 8080</code></pre>
                 <tr>
                   <td><strong>v1.0.0</strong></td>
                   <td>General Availability (GA)</td>
-                  <td>Frozen Capsule v1.0 spec, cross-ecosystem integration tests (<code>nio</code> + <code>nio-db</code> + <code>nio-js</code>).</td>
+                  <td>Frozen Capsule v1.0 spec, cross-ecosystem integration tests (<code>nio</code> + <code>nio-db</code> + NioJS).</td>
                 </tr>
               </tbody>
             </table>
