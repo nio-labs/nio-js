@@ -56,7 +56,7 @@
 
         <div class="nav-section">
           <div class="nav-section-title">Hybrid Engine & AI</div>
-          <a href="#native-acceleration" class="nav-link">8. Native Acceleration (/** @native */)</a>
+          <a href="native.html" class="nav-link">8. Native Acceleration (/** @native */)</a>
           <a href="#multi-worker" class="nav-link">9. Multi-Core Worker Pinning</a>
           <a href="python.html" class="nav-link">10. In-Process Python Guide</a>
           <a href="#benchmarks" class="nav-link">11. Bare-Metal Benchmarks</a>
@@ -352,36 +352,6 @@ post('/api/upload', async ({ formData }) => {
     preview: (await file.text()).slice(0, 100)
   };
 });</code></pre>
-        </section>
-
-        <!-- Section 8: Native Acceleration -->
-        <section id="native-acceleration" class="doc-section">
-          <h2>8. Native Acceleration (<code>/** @native */</code>)</h2>
-          <p>
-            For CPU-intensive tasks, <code>nio-js</code> provides the <code>/** @native */</code> directive. Functions marked with this directive bypass QuickJS execution overhead and run compiled Rust machine code:
-          </p>
-          <pre><code class="language-typescript">import { get } from 'nio.js';
-
-/** @native */
-function calculateChecksum(iterations: number): number {
-  let acc = 0;
-  for (let i = 0; i < iterations; i++) {
-    acc = (acc * 31 + i) & 0x7fffffff;
-  }
-  return acc;
-}
-
-get('/metrics/compute', ({ query }) => {
-  const rounds = Number(query.rounds || 100000);
-  return {
-    rounds,
-    result: calculateChecksum(rounds)
-  };
-});</code></pre>
-
-          <div class="callout callout-success">
-            <strong>Benchmark Performance:</strong> Under a 100,000 iteration loop benchmark, <code>nio-js</code> with native acceleration scores <strong>25,000 – 40,000+ req/s</strong>, outperforming Node (9,282 req/s) and Bun (9,001 req/s) by <strong>3x to 4x</strong>.
-          </div>
         </section>
 
         <!-- Section 9: Multi-Worker Pinning -->
