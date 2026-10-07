@@ -31,8 +31,15 @@ enum Command {
         name: String,
     },
     Init {
-        #[arg(default_value = "web")]
-        kind: String,
+        kind: Option<String>,
+        #[arg(short, long)]
+        name: Option<String>,
+        #[arg(short, long)]
+        framework: Option<String>,
+        #[arg(short, long)]
+        db: Option<String>,
+        #[arg(short, long)]
+        ai: Option<String>,
     },
     Run {
         file: PathBuf,
@@ -139,8 +146,8 @@ fn main_result() -> Result<()> {
         Command::Task { name } => {
             task::run_task(&name)?;
         }
-        Command::Init { kind } => {
-            init::init_project(&kind)?;
+        Command::Init { kind, name, framework, db, ai } => {
+            init::init_project(&kind, name, framework, db, ai)?;
         }
         Command::Build {
             file,

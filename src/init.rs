@@ -2,20 +2,48 @@ use anyhow::Result;
 use dialoguer::{theme::ColorfulTheme, Input, Select};
 use std::fs;
 
-pub fn init_project(kind: &str) -> Result<()> {
-    match kind {
-        "web" => init_monorepo("web")?,
-        "app" => init_monorepo("app")?,
+pub fn init_project(
+    kind_opt: &Option<String>,
+    name_opt: Option<String>,
+    fw_opt: Option<String>,
+    db_opt: Option<String>,
+    ai_opt: Option<String>,
+) -> Result<()> {
+    let kind = match kind_opt {
+        Some(k) => k.clone(),
+        None => {
+            let options = &["web", "app"];
+            let selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("What kind of project do you want to create?")
+                .default(0)
+                .items(&options[..])
+                .interact()?;
+            options[selection].to_string()
+        }
+    };
+
+    match kind.as_str() {
+        "web" => init_monorepo("web", name_opt, fw_opt, db_opt, ai_opt)?,
+        "app" => init_monorepo("app", name_opt, fw_opt, db_opt, ai_opt)?,
         _ => anyhow::bail!("Unknown project type '{}'. Use 'web' or 'app'.", kind),
     }
     Ok(())
 }
 
-fn init_monorepo(kind: &str) -> Result<()> {
-    let name: String = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt("Project name")
-        .default(if kind == "web" { "my-web-app".into() } else { "my-mobile-app".into() })
-        .interact_text()?;
+fn init_monorepo(
+    kind: &str,
+    name_opt: Option<String>,
+    fw_opt: Option<String>,
+    db_opt: Option<String>,
+    ai_opt: Option<String>,
+) -> Result<()> {
+    let name: String = match name_opt {
+        Some(n) => n,
+        None => Input::with_theme(&ColorfulTheme::default())
+            .with_prompt("Project name")
+            .default(if kind == "web" { "my-web-app".into() } else { "my-mobile-app".into() })
+            .interact_text()?,
+    };
 
     let frameworks = if kind == "web" {
         vec!["Vanilla (Zero-build)", "Lit", "React", "Vue", "Eleventy"]
@@ -23,28 +51,43 @@ fn init_monorepo(kind: &str) -> Result<()> {
         vec!["Vue", "React", "Svelte", "Vanilla"]
     };
 
-    let fw_selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt(if kind == "web" { "Choose a Web Framework" } else { "Choose a Framework for Capacitor" })
-        .default(0)
-        .items(&frameworks[..])
-        .interact()?;
-    let selected_fw = frameworks[fw_selection];
+    let selected_fw = match fw_opt {
+        Some(fw) => fw,
+        None => {
+            let fw_selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt(if kind == "web" { "Choose a Web Framework" } else { "Choose a Framework for Capacitor" })
+                .default(0)
+                .items(&frameworks[..])
+                .interact()?;
+            frameworks[fw_selection].to_string()
+        }
+    };
     
     let db_options = &["nio-db", "None"];
-    let db_selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Do you need a Database?")
-        .default(0)
-        .items(&db_options[..])
-        .interact()?;
-    let selected_db = db_options[db_selection];
+    let selected_db = match db_opt {
+        Some(db) => db,
+        None => {
+            let db_selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("Do you need a Database?")
+                .default(0)
+                .items(&db_options[..])
+                .interact()?;
+            db_options[db_selection].to_string()
+        }
+    };
 
     let ai_options = &["NioAI", "None"];
-    let ai_selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Do you need Intelligence (AI)?")
-        .default(0)
-        .items(&ai_options[..])
-        .interact()?;
-    let selected_ai = ai_options[ai_selection];
+    let selected_ai = match ai_opt {
+        Some(ai) => ai,
+        None => {
+            let ai_selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("Do you need Intelligence (AI)?")
+                .default(0)
+                .items(&ai_options[..])
+                .interact()?;
+            ai_options[ai_selection].to_string()
+        }
+    };
 
     println!("Initializing monorepo project '{}'...", name);
     fs::create_dir_all(&name)?;
@@ -76,7 +119,7 @@ get("/", () => reply("Hello from NioJS Backend!"));
     let frontend_dir = format!("{}/{}", name, kind);
     fs::create_dir_all(format!("{}/src", frontend_dir))?;
 
-    let (dev_cmd, build_cmd, deps, dev_deps) = match selected_fw {
+    let (dev_cmd, build_cmd, deps, dev_deps) = match selected_fw.as_str() {
         "Vue" => (
             "npx @vue/cli-service serve",
             "npx @vue/cli-service build",
