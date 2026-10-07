@@ -115,6 +115,32 @@ get("/", () => reply("Hello from NioJS Backend!"));
         fs::write(format!("{}/ai/prompts.txt", name), "You are a helpful NioAI assistant.\n")?;
     }
 
+    // Generate root nio.toml early so it isn't skipped if the user cancels Vite
+    let build_cmd = if kind == "app" { "npm run build && npx cap copy" } else { "npm run build" };
+    let nio_toml = format!(r#"# NioJS Configuration File
+# This file defines native task runner scripts (replaces npm run scripts).
+# Run tasks using `nio-js task <name>` (e.g., `nio-js task dev`)
+
+[tasks]
+dev = "nio-js run server.ts"
+build = "nio-js build server.ts -o dist/app.njs"
+start = "nio-js run dist/app.njs"
+dev_ui = "cd {} && npm run dev"
+build_ui = "cd {} && {}"
+serve = "nio-js task dev & nio-js task dev_ui & wait"
+"#, kind, kind, build_cmd);
+    fs::write(format!("{}/nio.toml", name), nio_toml)?;
+
+    // Dockerfile at the root early
+    let dockerfile = r#"FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://nio.dev/install.sh | bash
+COPY . /app
+WORKDIR /app
+CMD ["nio-js", "task", "start"]
+"#;
+    fs::write(format!("{}/Dockerfile", name), dockerfile)?;
+
     // Generate Frontend Folder (web or app)
     let frontend_dir = format!("{}/{}", name, kind);
     
@@ -193,60 +219,34 @@ get("/", () => reply("Hello from NioJS Backend!"));
         println!("Generating {} template using Vite...", selected_fw);
         let status = std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npx" })
             .args(if cfg!(target_os = "windows") {
-                vec!["/C", "npx", "-y", "create-vite@latest", &frontend_dir, "--template", template]
+                vec!["/C", "npx", "-y", "create-vite@latest", &frontend_dir, "--template", template, "--no-interactive"]
             } else {
-                vec!["-y", "create-vite@latest", &frontend_dir, "--template", template]
+                vec!["-y", "create-vite@latest", &frontend_dir, "--template", template, "--no-interactive"]
             })
             .status()?;
 
         if !status.success() {
-            anyhow::bail!("Failed to generate template using create-vite");
+            println!("Warning: Failed to generate template using create-vite. You may need to create the UI manually.");
         }
     }
 
     if kind == "app" {
         println!("Installing Capacitor...");
-        std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npm" })
+        let _ = std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npm" })
             .args(if cfg!(target_os = "windows") { vec!["/C", "npm", "install", "@capacitor/core"] } else { vec!["install", "@capacitor/core"] })
             .current_dir(&frontend_dir)
-            .status()?;
+            .status();
         
-        std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npm" })
+        let _ = std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npm" })
             .args(if cfg!(target_os = "windows") { vec!["/C", "npm", "install", "-D", "@capacitor/cli"] } else { vec!["install", "-D", "@capacitor/cli"] })
             .current_dir(&frontend_dir)
-            .status()?;
+            .status();
             
-        std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npx" })
+        let _ = std::process::Command::new(if cfg!(target_os = "windows") { "cmd" } else { "npx" })
             .args(if cfg!(target_os = "windows") { vec!["/C", "npx", "-y", "cap", "init", &name, "com.example.app", "--web-dir", "dist"] } else { vec!["-y", "cap", "init", &name, "com.example.app", "--web-dir", "dist"] })
             .current_dir(&frontend_dir)
-            .status()?;
+            .status();
     }
-
-    // Generate root nio.toml
-    let build_cmd = if kind == "app" { "npm run build && npx cap copy" } else { "npm run build" };
-    let nio_toml = format!(r#"# NioJS Configuration File
-# This file defines native task runner scripts (replaces npm run scripts).
-# Run tasks using `nio-js task <name>` (e.g., `nio-js task dev`)
-
-[tasks]
-dev = "nio-js run server.ts"
-build = "nio-js build server.ts -o dist/app.njs"
-start = "nio-js run dist/app.njs"
-dev_ui = "cd {} && npm run dev"
-build_ui = "cd {} && {}"
-serve = "nio-js task dev & nio-js task dev_ui & wait"
-"#, kind, kind, build_cmd);
-    fs::write(format!("{}/nio.toml", name), nio_toml)?;
-
-    // Dockerfile at the root
-    let dockerfile = r#"FROM ubuntu:24.04
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL https://nio.dev/install.sh | bash
-COPY . /app
-WORKDIR /app
-CMD ["nio-js", "task", "start"]
-"#;
-    fs::write(format!("{}/Dockerfile", name), dockerfile)?;
 
     println!("\n✨ Monorepo project '{}' initialized successfully!\n", name);
     println!("Next steps:");
