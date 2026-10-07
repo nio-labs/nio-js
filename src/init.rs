@@ -12,7 +12,7 @@ pub fn init_project(
     let kind = match kind_opt {
         Some(k) => k.clone(),
         None => {
-            let options = &["web", "app"];
+            let options = &["web", "app", "server"];
             let selection = Select::with_theme(&ColorfulTheme::default())
                 .with_prompt("What kind of project do you want to create?")
                 .default(0)
@@ -25,7 +25,8 @@ pub fn init_project(
     match kind.as_str() {
         "web" => init_monorepo("web", name_opt, fw_opt, db_opt, ai_opt)?,
         "app" => init_monorepo("app", name_opt, fw_opt, db_opt, ai_opt)?,
-        _ => anyhow::bail!("Unknown project type '{}'. Use 'web' or 'app'.", kind),
+        "server" => init_server(name_opt, db_opt, ai_opt)?,
+        _ => anyhow::bail!("Unknown project type '{}'. Use 'web', 'app', or 'server'.", kind),
     }
     Ok(())
 }
@@ -253,5 +254,90 @@ CMD ["nio-js", "task", "start"]
     println!("  cd {}", name);
     println!("  cd {} && npm install && cd ..", kind);
     println!("  nio-js task serve\n");
+    Ok(())
+}
+
+fn init_server(
+    name_opt: Option<String>,
+    db_opt: Option<String>,
+    ai_opt: Option<String>,
+) -> Result<()> {
+    let name: String = match name_opt {
+        Some(n) => n,
+        None => Input::with_theme(&ColorfulTheme::default())
+            .with_prompt("Project name")
+            .default("my-server".into())
+            .interact_text()?,
+    };
+
+    let db_options = &["nio-db", "None"];
+    let selected_db = match db_opt {
+        Some(db) => db,
+        None => {
+            let db_selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("Do you need a Database?")
+                .default(0)
+                .items(&db_options[..])
+                .interact()?;
+            db_options[db_selection].to_string()
+        }
+    };
+
+    let ai_options = &["NioAI", "None"];
+    let selected_ai = match ai_opt {
+        Some(ai) => ai,
+        None => {
+            let ai_selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("Do you need Intelligence (AI)?")
+                .default(0)
+                .items(&ai_options[..])
+                .interact()?;
+            ai_options[ai_selection].to_string()
+        }
+    };
+
+    println!("Initializing server project '{}'...", name);
+    fs::create_dir_all(&name)?;
+
+    let server_ts = r#"// NioJS Backend Entrypoint
+import { get, reply } from "nio.js";
+
+get("/", () => reply("Hello from NioJS Backend!"));
+"#;
+    fs::write(format!("{}/server.ts", name), server_ts)?;
+
+    if selected_db == "nio-db" {
+        fs::create_dir_all(format!("{}/db", name))?;
+        fs::write(format!("{}/db/schema.sql", name), "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);\n")?;
+        fs::write(format!("{}/db/setup.sh", name), "#!/bin/bash\necho 'Setting up nio-db...'\n")?;
+    }
+
+    if selected_ai == "NioAI" {
+        fs::create_dir_all(format!("{}/ai", name))?;
+        fs::write(format!("{}/ai/agent.py", name), "def process_prompt(prompt):\n    return f'AI Processed: {prompt}'\n")?;
+        fs::write(format!("{}/ai/prompts.txt", name), "You are a helpful NioAI assistant.\n")?;
+    }
+
+    let nio_toml = r#"# NioJS Configuration File
+[tasks]
+dev = "nio-js run server.ts"
+build = "nio-js build server.ts -o dist/app.njs"
+start = "nio-js run dist/app.njs"
+"#;
+    fs::write(format!("{}/nio.toml", name), nio_toml)?;
+
+    let dockerfile = r#"FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://nio.dev/install.sh | bash
+COPY . /app
+WORKDIR /app
+CMD ["nio-js", "task", "start"]
+"#;
+    fs::write(format!("{}/Dockerfile", name), dockerfile)?;
+
+    println!("\n✨ Server project '{}' initialized successfully!\n", name);
+    println!("Next steps:");
+    println!("  cd {}", name);
+    println!("  nio-js task dev\n");
     Ok(())
 }

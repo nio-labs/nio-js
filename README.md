@@ -69,7 +69,7 @@ You can quickly scaffold a new full-stack project or mobile app using the intera
 nio-js init
 ```
 
-This will automatically generate a monorepo setup featuring your chosen UI framework (Vue, React, Svelte, Lit, etc.), a NioJS backend, and native tooling (database, AI).
+This will automatically generate a monorepo setup featuring your chosen UI framework (Vue, React, Svelte, Lit, etc.), a NioJS backend, and native tooling (database, AI). You can also run `nio-js init server` to create a backend-only project.
 
 Android ARM64 binaries are included for a Termux preview. Run `pkg install curl coreutils`, then use the installer above; it installs into `$PREFIX/bin`. Real ARM64 device validation is still required.
 

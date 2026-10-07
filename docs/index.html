@@ -234,7 +234,7 @@ sudo install -m 755 target/release/nio-js /usr/local/bin/nio-js</code></pre>
           <p>You can optionally scaffold a new full-stack project or mobile app using the interactive initialization tool:</p>
           <pre><code class="language-bash">nio-js init</code></pre>
           
-          <p>This auto-generates a wired frontend (Vue, React, Svelte, etc.) and a NioJS backend with native tasks. You can run it interactively, or pass flags to skip prompts:</p>
+          <p>This auto-generates a wired frontend (Vue, React, Svelte, etc.) and a NioJS backend with native tasks, or a backend-only server. You can run it interactively, or pass flags to skip prompts:</p>
           
           <div class="table-container">
             <table>
@@ -267,6 +267,9 @@ sudo install -m 755 target/release/nio-js /usr/local/bin/nio-js</code></pre>
           
           <p>Example one-liner for a full React web app:</p>
           <pre><code class="language-bash">nio-js init web --name my-app --framework React --db nio-db --ai NioAI</code></pre>
+
+          <p>Example for a backend-only server project:</p>
+          <pre><code class="language-bash">nio-js init server --name my-api --db nio-db --ai None</code></pre>
         </section>
 
         <!-- Section 4: Route Registration -->
