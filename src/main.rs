@@ -41,6 +41,21 @@ enum Command {
         #[arg(short, long)]
         ai: Option<String>,
     },
+    Exec {
+        file: PathBuf,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+        #[command(flatten)]
+        preparation: Preparation,
+        #[arg(long, value_delimiter = ',')]
+        allow_net: Vec<String>,
+        #[arg(long)]
+        allow_private_network: bool,
+        #[arg(long, default_value = "64")]
+        memory_mb: usize,
+        #[arg(long, default_value = "30000")]
+        timeout_ms: u64,
+    },
     Run {
         file: PathBuf,
         #[arg(long, default_value = "3000")]
@@ -247,6 +262,40 @@ fn main_result() -> Result<()> {
         Command::Verify { file } => {
             prepare::read_capsule(&file)?;
             println!("Verified {}", file.display());
+        }
+        Command::Exec {
+            file,
+            args: _args,
+            preparation,
+            allow_net,
+            allow_private_network,
+            memory_mb,
+            timeout_ms,
+        } => {
+            ensure!(
+                (8..=1024).contains(&memory_mb),
+                "memory must be between 8 and 1024 MiB"
+            );
+            ensure!(
+                (10..=60000).contains(&timeout_ms),
+                "timeout must be between 10 and 60000 ms"
+            );
+            let c = if file.extension().is_some_and(|s| s == "njs") {
+                prepare::read_capsule(&file)?
+            } else {
+                prepare::prepare(&file, &preparation.options(vec![])?)?
+            };
+            let limits = engine::Limits {
+                memory: memory_mb * 1024 * 1024,
+                timeout: Duration::from_millis(timeout_ms),
+                body: 1048576,
+                policy: network::Policy {
+                    hosts: allow_net,
+                    private: allow_private_network,
+                },
+                in_flight: Arc::new(AtomicUsize::new(0)),
+            };
+            let _ = engine::Engine::new(Arc::new(c), limits)?;
         }
         Command::Run {
             file,
