@@ -126,8 +126,10 @@ get('/cpu', () => cpuIntensiveTask());
 </code></pre>
 
           <h2>Example: JSON & Static Caching</h2>
-          <p>You can also use this for complex JSON structures that don't change per-request, instantly beating standard JSON serializers:</p>
-          <pre><code class="language-typescript">/** @native */
+          <p>You can also create a JSON response once at route registration and serve its cached bytes on every request:</p>
+          <pre><code class="language-typescript">import { get } from 'nio.js';
+
+/** @native */
 function generateLargePayload(): Record<string, unknown> {
     return {
         message: "Hello World",
@@ -137,6 +139,72 @@ function generateLargePayload(): Record<string, unknown> {
 
 get('/json', generateLargePayload());
 </code></pre>
+
+          <h2>Real-world example: queue capacity planning</h2>
+          <p>
+            An operations endpoint can estimate how long a job backlog will take to clear. The route validates query parameters in JavaScript; the annotated function runs the repeated numeric calculation. It returns <code>-1</code> if the queue cannot clear within an hour.
+          </p>
+          <p>Save this as <code>app.ts</code> and run <code>nio-js run app.ts --port 3000</code>:</p>
+          <pre><code class="language-typescript">import { get, reply } from &#x27;nio.js&#x27;;
+
+/** @native */
+function estimateDrainSeconds(backlog: number, arrivalsPerSecond: number,
+                              workers: number, jobsPerWorkerPerSecond: number): number {
+  if (backlog &lt;= 0) return 0;
+  let queued = backlog;
+  const capacity = workers * jobsPerWorkerPerSecond;
+  for (let second = 1; second &lt;= 3600; second++) {
+    queued = queued + arrivalsPerSecond - capacity;
+    if (queued &lt;= 0) return second;
+  }
+  return -1; // The queue does not clear within an hour.
+}
+
+get(&#x27;/ops/queue-drain&#x27;, ({ query }) =&gt; {
+  const [backlog, arrivals, workers, rate] =
+    [query.backlog, query.arrivals, query.workers, query.rate].map(Number);
+  if (![backlog, arrivals, workers, rate].every(Number.isFinite) ||
+      backlog &lt; 0 || arrivals &lt; 0 || workers &lt;= 0 || rate &lt;= 0) {
+    return reply({ error: &#x27;Supply nonnegative backlog/arrivals and positive workers/rate&#x27; },
+                 { status: 400 });
+  }
+  return { estimatedSeconds: estimateDrainSeconds(backlog, arrivals, workers, rate) };
+});
+</code></pre>
+          <pre><code class="language-bash">curl 'http://127.0.0.1:3000/ops/queue-drain?backlog=1000&amp;arrivals=10&amp;workers=4&amp;rate=20'
+# {&quot;estimatedSeconds&quot;:15}</code></pre>
+
+          <h2>Real-world example: shard manifest API</h2>
+          <p>
+            A service can expose a default shard manifest and generate a bounded manifest for a requested shard count. The default response is created once during route registration and served from cached bytes. The parameterized response uses the Rust JSON builder for the annotated function's supported object and <code>Array.from</code> expression. Validate and bound user input in the route before passing it to <code>@native</code>.
+          </p>
+          <p>Save this as a separate <code>app.ts</code> and run <code>nio-js run app.ts --port 3000</code>:</p>
+          <pre><code class="language-typescript">import { get, reply } from &#x27;nio.js&#x27;;
+
+/** @native */
+function shardManifest(shards: number): Record&lt;string, unknown&gt; {
+  return {
+    version: 1,
+    shards: Array.from({ length: shards }, (_, id) =&gt; ({
+      id,
+      label: `shard-${id}`,
+      replica: id % 3
+    }))
+  };
+}
+
+get(&#x27;/ops/default-shards&#x27;, shardManifest(3));
+get(&#x27;/ops/shards&#x27;, ({ query }) =&gt; {
+  const count = Number(query.count);
+  if (!Number.isInteger(count) || count &lt; 1 || count &gt; 32) {
+    return reply({ error: &#x27;count must be an integer from 1 to 32&#x27; }, { status: 400 });
+  }
+  return shardManifest(count);
+});
+</code></pre>
+          <pre><code class="language-bash">curl 'http://127.0.0.1:3000/ops/shards?count=3'
+# {&quot;version&quot;:1,&quot;shards&quot;:[{&quot;id&quot;:0,&quot;label&quot;:&quot;shard-0&quot;,&quot;replica&quot;:0},{&quot;id&quot;:1,&quot;label&quot;:&quot;shard-1&quot;,&quot;replica&quot;:1},{&quot;id&quot;:2,&quot;label&quot;:&quot;shard-2&quot;,&quot;replica&quot;:2}]}</code></pre>
+          <p>Native work has a call overhead, so measure the full endpoint with your workload before choosing where to annotate functions.</p>
 
           <h2>Supported Operations and Limits</h2>
           <p>
