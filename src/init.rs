@@ -158,6 +158,32 @@ get("/", () => reply("Hello from NioJS Backend!"));
         fs::write(format!("{}/src/index.ts", frontend_dir), "console.log('Hello NioJS UI!');\n")?;
     }
 
+    let ext = if kind == "app" { "js" } else { "ts" };
+    let html_content = format!(r#"<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NioJS App</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/index.{}"></script>
+  </body>
+</html>
+"#, ext);
+    let react_vue_html = html_content.replace(&format!(r#"<script type="module" src="/src/index.{}"></script>"#, ext), "");
+
+    match selected_fw.as_str() {
+        "Vue" | "React" => {
+            fs::create_dir_all(format!("{}/public", frontend_dir))?;
+            fs::write(format!("{}/public/index.html", frontend_dir), react_vue_html)?;
+        },
+        _ => {
+            fs::write(format!("{}/index.html", frontend_dir), html_content)?;
+        }
+    }
+
     let mut final_deps = deps.to_string();
     let mut final_dev_deps = dev_deps.to_string();
 
