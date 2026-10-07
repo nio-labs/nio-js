@@ -62,7 +62,7 @@ impl<'js> FromJs<'js> for Reply {
             let raw: Value = array.get(2)?;
             let body = if raw.is_string() {
                 let s = String::from_js(ctx, raw)?;
-                if let Some(json_body) = s.strip_prefix("\0J") {
+                if s.starts_with("\0J") {
                     fast_type = 2;
                     Bytes::from(s.clone()).slice(2..)
                 } else {
