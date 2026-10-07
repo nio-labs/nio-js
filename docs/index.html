@@ -45,32 +45,33 @@
           <a href="#overview" class="nav-link active">1. Overview & Architecture</a>
           <a href="#installation" class="nav-link">2. Installation & Quickstart</a>
           <a href="#cli-reference" class="nav-link">3. CLI Command Reference</a>
+        <a href="#project-scaffolding" class="nav-link">4. Project Scaffolding (Add-on)</a>
         </div>
 
         <div class="nav-section">
           <div class="nav-section-title">Worker Runtime API</div>
-          <a href="#route-registration" class="nav-link">4. Route Registration</a>
-          <a href="#request-response" class="nav-link">5. Requests, Responses & Status</a>
-          <a href="#url-params-queries" class="nav-link">6. Parameters & Query Strings</a>
-          <a href="#body-parsing" class="nav-link">7. Body Parsing (JSON / Uploads)</a>
+          <a href="#route-registration" class="nav-link">5. Route Registration</a>
+          <a href="#request-response" class="nav-link">6. Requests, Responses & Status</a>
+          <a href="#url-params-queries" class="nav-link">7. Parameters & Query Strings</a>
+          <a href="#body-parsing" class="nav-link">8. Body Parsing (JSON / Uploads)</a>
         </div>
 
         <div class="nav-section">
           <div class="nav-section-title">Hybrid Engine & AI</div>
-          <a href="native.html" class="nav-link">8. Native Acceleration (/** @native */)</a>
-          <a href="#multi-worker" class="nav-link">9. Multi-Core Worker Pinning</a>
-          <a href="python.html" class="nav-link">10. In-Process Python Guide</a>
-          <a href="#benchmarks" class="nav-link">11. Bare-Metal Benchmarks</a>
+          <a href="native.html" class="nav-link">9. Native Acceleration (/** @native */)</a>
+          <a href="#multi-worker" class="nav-link">10. Multi-Core Worker Pinning</a>
+          <a href="python.html" class="nav-link">11. In-Process Python Guide</a>
+          <a href="#benchmarks" class="nav-link">12. Bare-Metal Benchmarks</a>
         </div>
 
         <div class="nav-section">
           <div class="nav-section-title">Packaging & Ecosystem</div>
-          <a href="#dependencies" class="nav-link">12. Zero-Node Dependencies & Lockfiles</a>
-          <a href="#capsules" class="nav-link">13. Single-File Capsules (.njs)</a>
-          <a href="#agent-mcp" class="nav-link">14. Agent Diagnostics & Stdio MCP</a>
-          <a href="#real-world-examples" class="nav-link">15. Real-World Production Examples</a>
-          <a href="#roadmap" class="nav-link">16. Ecosystem Roadmap to v1.0.0</a>
-          <a href="#faq" class="nav-link">17. Security, Limits & FAQ</a>
+          <a href="#dependencies" class="nav-link">13. Zero-Node Dependencies & Lockfiles</a>
+          <a href="#capsules" class="nav-link">14. Single-File Capsules (.njs)</a>
+          <a href="#agent-mcp" class="nav-link">15. Agent Diagnostics & Stdio MCP</a>
+          <a href="#real-world-examples" class="nav-link">16. Real-World Production Examples</a>
+          <a href="#roadmap" class="nav-link">17. Ecosystem Roadmap to v1.0.0</a>
+          <a href="#faq" class="nav-link">18. Security, Limits & FAQ</a>
         </div>
 
       </nav>
@@ -167,11 +168,6 @@ npm install -g @nio-labs/nio-js</code></pre>
 cd nio-js
 cargo build --release
 sudo install -m 755 target/release/nio-js /usr/local/bin/nio-js</code></pre>
-
-          <h3>Project Scaffolding (Optional Add-on)</h3>
-          <p>You can optionally scaffold a new full-stack project or mobile app using the interactive initialization tool:</p>
-          <pre><code class="language-bash">nio-js init</code></pre>
-          <p>This auto-generates a wired frontend (Vue, React, Svelte, etc.) and a NioJS backend with native tasks.</p>
         </section>
 
         <!-- Section 3: CLI Reference -->
@@ -232,9 +228,50 @@ sudo install -m 755 target/release/nio-js /usr/local/bin/nio-js</code></pre>
           </div>
         </section>
 
+        <!-- Section 4: Project Scaffolding -->
+        <section id="project-scaffolding" class="doc-section">
+          <h2>4. Project Scaffolding (Add-on)</h2>
+          <p>You can optionally scaffold a new full-stack project or mobile app using the interactive initialization tool:</p>
+          <pre><code class="language-bash">nio-js init</code></pre>
+          
+          <p>This auto-generates a wired frontend (Vue, React, Svelte, etc.) and a NioJS backend with native tasks. You can run it interactively, or pass flags to skip prompts:</p>
+          
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Option</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>-n, --name &lt;NAME&gt;</code></td>
+                  <td>The project directory name.</td>
+                </tr>
+                <tr>
+                  <td><code>-f, --framework &lt;FW&gt;</code></td>
+                  <td>The frontend framework (e.g., <code>React</code>, <code>Vue</code>, <code>Svelte</code>, <code>Lit</code>, <code>Vanilla</code>, <code>Blank</code>).</td>
+                </tr>
+                <tr>
+                  <td><code>-d, --db &lt;DB&gt;</code></td>
+                  <td>Database selection (e.g., <code>nio-db</code> or <code>None</code>).</td>
+                </tr>
+                <tr>
+                  <td><code>-a, --ai &lt;AI&gt;</code></td>
+                  <td>AI integration (e.g., <code>NioAI</code> or <code>None</code>).</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <p>Example one-liner for a full React web app:</p>
+          <pre><code class="language-bash">nio-js init web --name my-app --framework React --db nio-db --ai NioAI</code></pre>
+        </section>
+
         <!-- Section 4: Route Registration -->
         <section id="route-registration" class="doc-section">
-          <h2>4. Route Registration</h2>
+          <h2>5. Route Registration</h2>
           <p>
             Services import methods directly from <code>'nio.js'</code>. Supported verbs include <code>get</code>, <code>post</code>, <code>put</code>, <code>del</code>, <code>patch</code>, <code>head</code>, and <code>options</code>:
           </p>
@@ -259,7 +296,7 @@ get('/stats', async () => {
 
         <!-- Section 5: Requests & Responses -->
         <section id="request-response" class="doc-section">
-          <h2>5. Requests, Responses & Status Codes</h2>
+          <h2>6. Requests, Responses & Status Codes</h2>
           <p>
             Handlers can return primitive values, plain JSON objects, binary buffers, or explicitly formatted responses via <code>reply()</code>:
           </p>
@@ -320,7 +357,7 @@ post('/api/orders', async ({ json }) => {
 
         <!-- Section 6: Parameters & Queries -->
         <section id="url-params-queries" class="doc-section">
-          <h2>6. Parameters & Query Strings</h2>
+          <h2>7. Parameters & Query Strings</h2>
           <p>
             Route parameters use <code>:param</code> syntax and are accessed via <code>req.params</code>. Query strings are parsed into <code>req.query</code>:
           </p>
@@ -341,7 +378,7 @@ get('/search', ({ query }) => {
 
         <!-- Section 7: Body Parsing -->
         <section id="body-parsing" class="doc-section">
-          <h2>7. Body Parsing (JSON & Multipart)</h2>
+          <h2>8. Body Parsing (JSON & Multipart)</h2>
           <p>
             Request bodies can be consumed exactly once via <code>.json()</code>, <code>.text()</code>, <code>.blob()</code>, or <code>.formData()</code>:
           </p>
@@ -372,7 +409,7 @@ post('/api/upload', async ({ formData }) => {
 
         <!-- Section 9: Multi-Worker Pinning -->
         <section id="multi-worker" class="doc-section">
-          <h2>9. Multi-Core Worker Pinning</h2>
+          <h2>10. Multi-Core Worker Pinning</h2>
           <p>
             Scale across all CPU cores effortlessly. Every worker maintains its own isolated QuickJS runtime and thread-safe engine instance sharing a single socket listener:
           </p>
@@ -385,7 +422,7 @@ nio-js run app.ts --port 3000 --workers 8</code></pre>
 
         <!-- Section 11: Benchmarks -->
         <section id="benchmarks" class="doc-section">
-          <h2>11. Benchmark Highlights (Bare Metal)</h2>
+          <h2>12. Benchmark Highlights (Bare Metal)</h2>
           <p>
             Measured on WSL2 Linux (Intel Core Ultra 5 135H) using 1-round "quick" methodology without warmup:
           </p>
@@ -405,18 +442,18 @@ nio-js run app.ts --port 3000 --workers 8</code></pre>
               <tbody>
                 <tr>
                   <td><strong>Startup</strong></td>
-                  <td><strong>13.32 ms</strong></td>
-                  <td>25.08 ms</td>
-                  <td>54.27 ms</td>
-                  <td>24.99 ms</td>
+                  <td><strong>14.32 ms</strong></td>
+                  <td>26.08 ms</td>
+                  <td>55.27 ms</td>
+                  <td>25.99 ms</td>
                   <td>🏆 <strong>Clear Win</strong> (Fastest cold start)</td>
                 </tr>
                 <tr>
                   <td><strong>Idle RSS</strong></td>
-                  <td><strong>14.38 MiB</strong></td>
-                  <td>19.25 MiB</td>
-                  <td>60.44 MiB</td>
-                  <td>47.16 MiB</td>
+                  <td><strong>15.38 MiB</strong></td>
+                  <td>20.25 MiB</td>
+                  <td>61.44 MiB</td>
+                  <td>48.16 MiB</td>
                   <td>🏆 <strong>Clear Win</strong> (Lowest memory footprint)</td>
                 </tr>
                 <tr>
@@ -466,7 +503,7 @@ nio-js run app.ts --port 3000 --workers 8</code></pre>
 
         <!-- Section 12: Dependencies -->
         <section id="dependencies" class="doc-section">
-          <h2>12. Zero-Node Dependencies & Lockfiles</h2>
+          <h2>13. Zero-Node Dependencies & Lockfiles</h2>
 
           <p>
             No <code>package.json</code> install steps or bloated <code>node_modules</code>. Import standard ES modules over HTTPS:
@@ -490,7 +527,7 @@ nio-js build app.ts --offline --frozen -o app.njs</code></pre>
 
         <!-- Section 13: Capsules -->
         <section id="capsules" class="doc-section">
-          <h2>13. Single-File Capsules (<code>.njs</code>)</h2>
+          <h2>14. Single-File Capsules (<code>.njs</code>)</h2>
           <p>
             A capsule bundles the complete graph, assets, cryptographic hashes, and capability envelope into a portable artifact:
           </p>
@@ -509,7 +546,7 @@ nio-js run dist/app.njs --port 8080</code></pre>
 
         <!-- Section 14: Agent MCP -->
         <section id="agent-mcp" class="doc-section">
-          <h2>14. Agent Diagnostics & Stdio MCP</h2>
+          <h2>15. Agent Diagnostics & Stdio MCP</h2>
           <p>
             Engineered specifically to support autonomous agents like Antigravity, Claude, and Cursor:
           </p>
@@ -531,7 +568,7 @@ nio-js run dist/app.njs --port 8080</code></pre>
 
         <!-- Section 15: Real-World Examples -->
         <section id="real-world-examples" class="doc-section">
-          <h2>15. Real-World Production Examples</h2>
+          <h2>16. Real-World Production Examples</h2>
           <p>Explore production-tested code directly inside the repository:</p>
           <ul>
             <li><strong><a href="https://github.com/nio-labs/nio-js/tree/main/examples/api-gateway" target="_blank" rel="noreferrer">REST API Gateway (<code>examples/api-gateway</code>)</a></strong>: Dynamic routing, query filtering, JSON validations, and native loop checksum acceleration.</li>
@@ -541,7 +578,7 @@ nio-js run dist/app.njs --port 8080</code></pre>
 
         <!-- Section 16: Roadmap -->
         <section id="roadmap" class="doc-section">
-          <h2>16. Ecosystem Roadmap to v1.0.0</h2>
+          <h2>17. Ecosystem Roadmap to v1.0.0</h2>
           <p>
             NioJS is engineered to operate seamlessly as the execution tier of the wider Nio platform:
           </p>
@@ -600,7 +637,7 @@ nio-js run dist/app.njs --port 8080</code></pre>
 
         <!-- Section 17: FAQ -->
         <section id="faq" class="doc-section">
-          <h2>17. Security, Limits & FAQ</h2>
+          <h2>18. Security, Limits & FAQ</h2>
 
           <div class="faq-item">
             <h3>Q: Why does <code>nio-js run</code> reject routes registered after startup?</h3>
