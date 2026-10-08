@@ -250,7 +250,7 @@ Local imports are confined to the entrypoint's directory after canonicalization,
 
 ### Benchmark Highlights (Bare Metal HTTP)
 
-*Measured on macOS ARM64 using 1-round "quick" methodology without warmup:*
+*Measured using 1-round "quick" methodology without warmup:*
 
 <div align="center" style="overflow-x: auto;">
 <table>
