@@ -18,12 +18,12 @@
     "package:platform": "node scripts/package-platform.cjs"
   },
   "optionalDependencies": {
-    "@nio-labs/nio-js-android-arm64": "0.2.7",
-    "@nio-labs/nio-js-darwin-arm64": "0.2.7",
-    "@nio-labs/nio-js-darwin-x64": "0.2.7",
-    "@nio-labs/nio-js-linux-arm64": "0.2.7",
-    "@nio-labs/nio-js-linux-x64": "0.2.7",
-    "@nio-labs/nio-js-win32-x64": "0.2.7"
+    "@nio-labs/nio-js-android-arm64": "0.3.0",
+    "@nio-labs/nio-js-darwin-arm64": "0.3.0",
+    "@nio-labs/nio-js-darwin-x64": "0.3.0",
+    "@nio-labs/nio-js-linux-arm64": "0.3.0",
+    "@nio-labs/nio-js-linux-x64": "0.3.0",
+    "@nio-labs/nio-js-win32-x64": "0.3.0"
   },
   "publishConfig": { "access": "public" }
 }

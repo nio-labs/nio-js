@@ -41,6 +41,8 @@ enum Command {
         db: Option<String>,
         #[arg(short, long)]
         ai: Option<String>,
+        #[arg(long)]
+        host: Option<String>,
     },
     Exec {
         file: PathBuf,
@@ -168,8 +170,9 @@ fn main_result() -> Result<()> {
             framework,
             db,
             ai,
+            host,
         } => {
-            init::init_project(&kind, name, framework, db, ai)?;
+            init::init_project(&kind, name, framework, db, ai, host)?;
         }
         Command::Build {
             file,

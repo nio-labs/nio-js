@@ -31,8 +31,10 @@ def main():
     if NIO.is_file():
         runtimes.append(("NioJS", [str(NIO), "exec", str(SUITE)]))
         runtimes.append(("NioJS (@native)", [str(NIO), "exec", str(SUITE_NATIVE)]))
-        runtimes.append(("NioJS (Python)", [str(NIO), "exec", str(SUITE_PYTHON)]))
+        # runtimes.append(("NioJS (Python)", [str(NIO), "exec", str(SUITE_PYTHON)]))
         runtimes.append(("NioJS (Rust)", [str(NIO), "exec", str(SUITE_RUST)]))
+        SUITE_ZIG = Path(__file__).with_name("suite_zig.mjs")
+        runtimes.append(("NioJS (Zig)", [str(NIO), "exec", str(SUITE_ZIG)]))
     else:
         print("Build nio-js first!")
         sys.exit(1)
