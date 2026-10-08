@@ -403,11 +403,17 @@ Exposes JSON-RPC 2.0 tools:
 
 Multi-worker servers automatically detect physical CPU topologies when sizing the worker pool.
 
-## Python AI Bridge
+## The Hybrid Engine (Zig, Go, C & Python)
 
-Integrate standard Python libraries (`pandas`, `scipy`), machine learning models, and standard scripts directly into your TypeScript services without IPC or microservice latency.
+NioJS lets you seamlessly blend languages in a single high-throughput event loop, without orchestrating external microservices.
 
-📖 **[Read the Full Python Integration Guide](https://nio-labs.github.io/nio-js/python.html)** to learn how to write full Python code natively inside NioJS.
+- **⚡ Zig (C-ABI FFI)**: Dynamically compile and bind high-speed cryptography or math directly to QuickJS (`import { verify } from './crypto.zig'`).
+- **☁️ Go (cgo)**: Utilize Go's `cgo` to build shared libraries, granting your JS backend access to Go's K8s/gRPC ecosystem (`import { get_status } from './network.go'`).
+- **💾 Raw C (TinyCC)**: Embedded TinyCC compiles raw C code in-memory at runtime. No toolchains, just instant execution (`import { parse } from './legacy.c'`).
+- **🧠 Python (PyO3)**: Run machine learning models natively alongside your JS router via PyO3, sharing memory space without IPC overhead (`import { predict } from './model.py'`).
+- **🦀 Rust (native)**: Use the `/** @native */` directive to compile heavy JS math loops into machine code seamlessly.
+
+📖 **[Browse Real-World Hybrid Examples](https://github.com/nio-labs/nio-js/tree/main/examples)** to see these languages working together in production pipelines.
 
 ## Validation
 

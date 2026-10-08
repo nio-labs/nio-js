@@ -115,7 +115,7 @@
           <ul>
             <li><strong>Engine Core</strong>: Embedded QuickJS-NG (<code>rquickjs</code> 0.14) inside an asynchronous multi-threaded <strong>Tokio / Hyper Rust host</strong>.</li>
             <li><strong>Compact Runtime</strong>: Embedded JavaScript execution and HTTP serving in a Rust host.</li>
-            <li><strong>Hybrid Compute Offloading</strong>: JavaScript handles routing and JSON orchestration. Heavy loops escape to <strong>native Rust machine code</strong> (<code>/** @native */</code>) or in-process <strong>Python AI algorithms</strong> via PyO3.</li>
+            <li><strong>Hybrid Compute Offloading</strong>: JavaScript handles routing and JSON orchestration. Heavy computation escapes seamlessly to <strong>native Rust machine code</strong> (<code>/** @native */</code>), dynamically compiled <strong>Zig &amp; Raw C FFI</strong>, <strong>Go cloud APIs</strong>, or in-process <strong>Python AI algorithms</strong>.</li>
             <li><strong>Zero <code>node_modules</code></strong>: Modules are imported by HTTPS URL (esm.sh / UNPKG) with cryptographic SHA-256 lockfile pinning.</li>
             <li><strong>Tamper-Proof Capsules</strong>: Ship a production app in one portable <code>.njs</code> file containing verified bytecode/source, asset tables, and permission envelopes.</li>
           </ul>

@@ -17,7 +17,7 @@
 5. [Hybrid Performance & Native Acceleration](#5-hybrid-performance--native-acceleration)
    - [The `/** @native */` Directive](#the-native-directive)
    - [Multi-Worker Execution](#multi-worker-execution)
-6. [In-Process Python AI (Hybrid Bridge)](#6-in-process-python-ai-hybrid-bridge)
+6. [The Hybrid Engine (Zig, Go, Raw C & Python)](#6-the-hybrid-engine-zig-go-raw-c--python)
 7. [Dependencies Without `node_modules`](#7-dependencies-without-node_modules)
    - [HTTPS & CDN Imports (esm.sh / UNPKG)](#https--cdn-imports-esmsh--unpkg)
    - [Offline Lockfiles (`nio.lock`)](#offline-lockfiles-niolock)
@@ -38,7 +38,7 @@ Traditional JavaScript runtimes (Node.js, Deno, Bun) were designed for full serv
 
 `NioJS` takes a fundamentally different approach:
 - **Engine**: Embedded [QuickJS](https://bellard.org/quickjs/) running inside a multi-worker **Rust host** (built with Tokio & Hyper).
-- **Hybrid Compute**: Lightweight JS controls routing and business logic, while computationally intensive tasks are compiled or offloaded directly to **Rust** or **in-process CPython**.
+- **Hybrid Compute**: Lightweight JS controls routing and business logic, while computationally intensive tasks escape seamlessly to **native Rust**, dynamically compiled **Zig** & **Raw C** via FFI, **Go** cloud APIs, or **in-process Python** AI models.
 - **Self-Contained Capsules**: Applications bundle into a single portable `.njs` capsule containing immutable code, SHA-256 digests, and assets.
 
 ```
@@ -277,34 +277,42 @@ Each worker runs its own QuickJS runtime and shares the server's HTTP listener.
 
 ---
 
-## 6. In-Process Python AI (Hybrid Bridge)
+## 6. The Hybrid Engine (Zig, Go, Raw C & Python)
 
+Need Python for machine learning? Zig for cryptography? Go for Kubernetes integrations? Raw C for legacy hardware parsing?  
+`NioJS` integrates all of them **directly in-process**. No REST endpoints, no subprocess pipes, and zero network serialization latency.
 
-Need Python for machine learning, data science, or Hugging Face pipelines?  
-`NioJS` integrates **CPython directly in-process via PyO3**. No REST endpoints, no subprocess pipes, and zero network serialization latency.
+### The Code (`server.ts`)
 
-### 1. Write the Python Module (`classifier.py`)
-```python
-def classify_text(text: str) -> str:
-    lower = text.lower()
-    if "bug" in lower or "crash" in lower:
-        return "urgent_issue"
-    return "general_inquiry"
-```
+You can effortlessly mix and match all supported languages directly in your TypeScript business logic:
 
-### 2. Import Directly into TypeScript (`server.ts`)
 ```typescript
-import { get } from 'nio.js';
+import { get, reply } from 'nio.js';
+
+// 1. Python AI (via PyO3)
 import { classify_text } from './classifier.py';
 
-get('/classify', ({ query }) => {
-  const prompt = query.text || 'App crashed on boot';
+// 2. Zig FFI (Dynamically compiled C-ABI)
+import { verify_signature } from './crypto.zig';
+
+// 3. Go Cloud-Native (via cgo shared library)
+import { FetchClusterStatus } from './network.go';
+
+// 4. Raw C (Compiled in-memory via TinyCC)
+import { parse_legacy_sensor } from './legacy_parser.c';
+
+get('/api/hybrid', () => {
+  const prompt = 'App crashed on boot';
   const category = classify_text(prompt);
-  return { prompt, category };
+  const isValid = verify_signature(150.0, 89231.0);
+  const cluster = JSON.parse(FetchClusterStatus());
+  const voltage = parse_legacy_sensor(420.5, 1.05);
+
+  return { category, isValid, cluster, voltage };
 });
 ```
 
-### 3. Run Seamlessly
+### Run Seamlessly
 ```bash
 nio-js run server.ts --port 3000
 ```
