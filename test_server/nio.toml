@@ -1,0 +1,5 @@
+# NioJS Configuration File
+[tasks]
+dev = "nio-js run server.ts"
+build = "nio-js build server.ts -o dist/app.njs"
+start = "nio-js run dist/app.njs"

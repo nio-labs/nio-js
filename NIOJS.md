@@ -8,7 +8,7 @@ Status: design specification with full multi-worker server, agent tooling (MCP s
 
 ## Product direction
 
-nio-js makes small services easy to write, inspect, deploy, and execute by autonomous AI agents. Its identity is a simple native application API, verified dependency packaging, multi-core worker pinning, and hybrid polyglot execution.
+nio-js makes small services easy to write, inspect, deploy, and execute by autonomous AI agents. Its identity is a simple native application API, verified dependency packaging, multi-core worker pinning, and hybrid hybrid execution.
 
 - Project and CLI: `nio-js`.
 - Built-in application module: `'nio.js'`.

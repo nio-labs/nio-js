@@ -7,7 +7,7 @@ import { get } from 'nio.js'
 get('/', 'Hello World')
 ```
 
-The engine is embedded through `rquickjs` 0.14 (QuickJS-NG) coupled with a multi-worker Rust host, native loop offloading, and optional in-process Python AI execution. Node and npm are not needed to build or execute this project.
+The engine is embedded through `rquickjs` 0.14 (QuickJS-NG) coupled with a multi-worker Rust host, native loop offloading, dynamic Zig FFI, and optional in-process Python AI execution. Node and npm are not needed to build or execute this project.
 
 📖 **[Read the Complete Guide to NioJS](GUIDE.md)** *(or browse online at [nio-labs.github.io/nio-js](https://nio-labs.github.io/nio-js/))* for detailed architecture, API reference, native acceleration, and deployment patterns.
 

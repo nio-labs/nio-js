@@ -3,7 +3,7 @@
 This example shows how `nio-js` executes **in-process Python AI algorithms** directly inside a TypeScript worker without spawning subprocesses or running external microservices.
 
 ## Features Demonstrated
-- **Zero-Latency Polyglot Bridge**: TypeScript imports `./agent_kernel.py` functions seamlessly.
+- **Zero-Latency Hybrid Bridge**: TypeScript imports `./agent_kernel.py` functions seamlessly.
 - **Intent Categorization**: Real-time natural language query routing.
 - **RAG Context Scoring**: Evaluating relevance of retrieved documents for LLM context windows.
 - **Task Planning API**: Generating structured task specs for autonomous agent runs.

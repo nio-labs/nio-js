@@ -17,7 +17,7 @@
 5. [Hybrid Performance & Native Acceleration](#5-hybrid-performance--native-acceleration)
    - [The `/** @native */` Directive](#the-native-directive)
    - [Multi-Worker Execution](#multi-worker-execution)
-6. [In-Process Python AI (Polyglot Bridge)](#6-in-process-python-ai-polyglot-bridge)
+6. [In-Process Python AI (Hybrid Bridge)](#6-in-process-python-ai-hybrid-bridge)
 7. [Dependencies Without `node_modules`](#7-dependencies-without-node_modules)
    - [HTTPS & CDN Imports (esm.sh / UNPKG)](#https--cdn-imports-esmsh--unpkg)
    - [Offline Lockfiles (`nio.lock`)](#offline-lockfiles-niolock)
@@ -277,7 +277,7 @@ Each worker runs its own QuickJS runtime and shares the server's HTTP listener.
 
 ---
 
-## 6. In-Process Python AI (Polyglot Bridge)
+## 6. In-Process Python AI (Hybrid Bridge)
 
 
 Need Python for machine learning, data science, or Hugging Face pipelines?  

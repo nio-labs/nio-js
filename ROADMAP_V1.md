@@ -1,7 +1,7 @@
 # Roadmap to v1.0.0: The Agent-Native Worker Runtime
 
 > **Target:** Stable General Availability (GA) v1.0.0  
-> **Mission:** Establish `nio-js` as a polyglot worker runtime natively integrated into the Nio ecosystem (`nio` + `nio-db` + `nio-js`).
+> **Mission:** Establish `nio-js` as a hybrid worker runtime natively integrated into the Nio ecosystem (`nio` + `nio-db` + `nio-js`).
 
 ---
 
@@ -161,7 +161,7 @@
 
 ---
 
-### 🌍 Milestone 5: WebAssembly & Polyglot Engine (`v0.8.0`)
+### 🌍 Milestone 5: WebAssembly & Hybrid Engine (`v0.8.0`)
 **Theme:** Universal execution and secure sandboxing for C, C++, Rust, Go, and Zig.
 
 - [ ] **WebAssembly (Wasm) Runtime Core:**
@@ -170,7 +170,7 @@
 - [ ] **WASI (WebAssembly System Interface) Support:**
   - Secure, capability-based access to file system, environment variables, and system clocks for backend Wasm modules.
   - Strict sandboxing: Wasm capsules cannot access host resources unless explicitly granted via capability flags.
-- [ ] **TypeScript Polyglot API (`import { wasm } from 'nio.js'`):**
+- [ ] **TypeScript Hybrid API (`import { wasm } from 'nio.js'`):**
   - Instant instantiation of Go, Rust, and C modules directly from TypeScript:
     ```javascript
     import { wasm } from 'nio.js';
@@ -212,5 +212,5 @@
 | **v0.5.0** | `nio` Agent & Event Bus | Event workers (`on()`), dual MCP + `nio` tool registry (`tool()`), unified sandbox |
 | **v0.6.0** | Resilience & DevEx | Zero-downtime hot reload, worker resource limits, memory boundaries |
 | **v0.7.0** | Packaging & Static Assets | Static asset serving, compiled `.njs` bytecode cache, optimized capsule distribution |
-| **v0.8.0** | WebAssembly & Polyglot Engine | Wasm runtime core, WASI support, safe execution for C/C++/Rust/Go capsules |
+| **v0.8.0** | WebAssembly & Hybrid Engine | Wasm runtime core, WASI support, safe execution for C/C++/Rust/Go capsules |
 | **v1.0.0** | **General Availability (GA)** | Frozen Capsule v1.0 spec, cross-ecosystem test suite, production deployment presets |
