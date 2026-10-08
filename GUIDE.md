@@ -465,6 +465,21 @@ nio-js mcp
 ### Q: Does `NioJS` run standard npm packages?
 **A:** Yes! Any modern ES Module published on npm can be imported via `https://esm.sh/<package>` or `https://unpkg.com/<package>`. Packages depending on Node.js-specific C++ addons or deprecated CommonJS globals should use modern ESM equivalents.
 
+### Q: How does the Hybrid Engine share memory between languages?
+**A:** NioJS handles cross-boundary communication dynamically. Standard HTTP payloads are routed via QuickJS. When calling Zig or Raw C FFI, data is passed via fast C-ABI memory pointers. Python bridging utilizes PyO3 memory sharing with the Rust host.
+
+### Q: Is NioJS meant to replace Next.js or Nuxt?
+**A:** No. NioJS is a backend worker runtime, optimized for high-throughput HTTP APIs, AI agent execution, and computationally heavy microservices. For full-stack apps, you should build your frontend (Vue, React, Svelte) statically and serve it alongside your NioJS backend API.
+
+### Q: What exactly is a `.njs` capsule?
+**A:** A capsule is a single-file, tamper-proof deployment artifact. When you run `nio-js build`, it bundles your Javascript, downloaded ESM dependencies, FFI bindings, and asset files into one immutable payload that executes without needing `node_modules` on the server.
+
+### Q: How does `/** @native */` differ from Zig FFI?
+**A:** `/** @native */` is a zero-config directive that tells the Rust host to dynamically compile your Javascript math loops into machine code under the hood. Zig FFI is used when you explicitly want to write raw C/Zig code and bind it manually to your project for things like cryptography.
+
+### Q: Does NioJS support WebSockets?
+**A:** WebSocket and SSE (Server-Sent Events) streaming are currently scheduled for our next major milestone (v0.4.0).
+
 ### Q: How do I test my service?
 **A:** Use standard HTTP test clients or `curl`:
 ```bash

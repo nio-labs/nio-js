@@ -723,7 +723,7 @@ nio-js run dist/app.njs --port 8080</code></pre>
           </p>
         </section>
 
-        <!-- Section 17: FAQ -->
+                <!-- Section 17: FAQ -->
         <section id="faq" class="doc-section">
           <h2>18. Security, Limits & FAQ</h2>
 
@@ -738,6 +738,26 @@ nio-js run dist/app.njs --port 8080</code></pre>
           <div class="faq-item">
             <h3>Q: Can I run existing npm modules?</h3>
             <p>Yes. Any ESM module published to npm can be imported via <code>https://esm.sh/&lt;pkg&gt;</code>. Pure JavaScript and Web standard modules work out of the box.</p>
+          </div>
+          <div class="faq-item">
+            <h3>Q: How does the Hybrid Engine share memory between languages?</h3>
+            <p>Standard HTTP payloads are routed via QuickJS. When calling Zig or Raw C FFI, data is passed via ultra-fast C-ABI memory pointers. Python bridging utilizes PyO3 memory sharing directly with the Rust host.</p>
+          </div>
+          <div class="faq-item">
+            <h3>Q: Is NioJS meant to replace Next.js or Nuxt?</h3>
+            <p>No. NioJS is a backend worker runtime, optimized for high-throughput HTTP APIs and AI agent execution. For full-stack apps, you should build your frontend (Vue/React) statically and serve it alongside your NioJS backend API.</p>
+          </div>
+          <div class="faq-item">
+            <h3>Q: What exactly is a <code>.njs</code> capsule?</h3>
+            <p>A capsule is a single-file deployment artifact. <code>nio-js build</code> bundles your JavaScript, downloaded ESM dependencies, FFI bindings, and static assets into one immutable payload that executes without needing <code>npm install</code> on the target server.</p>
+          </div>
+          <div class="faq-item">
+            <h3>Q: How does <code>/** @native */</code> differ from Zig FFI?</h3>
+            <p><code>/** @native */</code> is a zero-config directive that tells the Rust host to dynamically compile your <i>JavaScript</i> math loops into machine code. Zig FFI is used when you explicitly want to write raw C/Zig code and bind it manually to your project.</p>
+          </div>
+          <div class="faq-item">
+            <h3>Q: Does NioJS support WebSockets?</h3>
+            <p>WebSocket and SSE (Server-Sent Events) streaming support are currently in active development and scheduled for the next major release milestone.</p>
           </div>
         </section>
 
