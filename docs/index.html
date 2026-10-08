@@ -617,18 +617,21 @@ nio-js build app.ts --offline --frozen -o app.njs</code></pre>
         <section id="capsules" class="doc-section">
           <h2>14. Single-File Capsules (<code>.njs</code>)</h2>
           <p>
-            A capsule bundles the complete graph, assets, cryptographic hashes, and capability envelope into a portable artifact:
+            With the introduction of <strong>Capsule v2.0 (NJSB)</strong>, a capsule is a high-performance, cryptographically signed binary artifact. It bundles your complete dependency graph as <strong>pre-compiled QuickJS bytecode</strong>, along with raw binary assets, for zero-parsing <code>&lt; 1ms</code> cold starts.
           </p>
-          <pre><code class="language-bash"># 1. Build capsule with embedded assets
-nio-js build app.ts --asset logo.svg=assets/logo.svg -o dist/app.njs
+          <pre><code class="language-bash"># 1. Generate an Ed25519 publisher identity
+nio-js keys gen --email admin@example.com
 
-# 2. Inspect graph and metadata
+# 2. Build and sign capsule with embedded assets & AOT bytecode
+nio-js build app.ts --asset logo.svg=assets/logo.svg --sign admin@example.com -o dist/app.njs
+
+# 3. Inspect binary graph and metadata
 nio-js inspect dist/app.njs
 
-# 3. Cryptographically verify
+# 4. Cryptographically verify signature and hashes
 nio-js verify dist/app.njs
 
-# 4. Run standalone in production
+# 5. Run standalone in production
 nio-js run dist/app.njs --port 8080</code></pre>
         </section>
 
@@ -751,7 +754,7 @@ nio-js run dist/app.njs --port 8080</code></pre>
           </div>
           <div class="faq-item">
             <h3>Q: What exactly is a <code>.njs</code> capsule?</h3>
-            <p>A capsule is a single-file deployment artifact. <code>nio-js build</code> bundles your JavaScript, downloaded ESM dependencies, FFI bindings, and static assets into one immutable payload that executes without needing <code>npm install</code> on the target server.</p>
+            <p>A capsule is a single-file deployment artifact. <code>nio-js build</code> compiles your TypeScript/JavaScript into Ahead-of-Time (AOT) QuickJS bytecode and bundles it alongside downloaded ESM dependencies, FFI bindings, and static assets into one immutable binary payload. This binary executes with &lt;1ms cold starts without needing <code>npm install</code> on the target server and is signed cryptographically for security.</p>
           </div>
           <div class="faq-item">
             <h3>Q: How does <code>/** @native */</code> differ from Zig FFI?</h3>

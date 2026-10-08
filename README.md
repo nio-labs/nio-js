@@ -111,15 +111,16 @@ Pin the runtime version and dependency URLs, commit `nio.lock`, and use `--froze
 ## Capsules
 
 ```bash
-nio-js build examples/api-gateway/server.ts -o api-gateway.njs
+nio-js keys gen --email admin@domain.com
+nio-js build examples/api-gateway/server.ts --sign admin@domain.com -o api-gateway.njs
 nio-js inspect api-gateway.njs
 nio-js verify api-gateway.njs
 nio-js run api-gateway.njs --port 3000
 ```
 
-Capsules are versioned JSON documents containing JavaScript modules, dependency edges, per-object SHA-256 digests, source maps, assets, and required network destinations. They contain portable source, not engine bytecode. Execution requires neither the original source nor the dependency cache and performs no dependency downloads.
+With Capsule v2.0 (NJSB), capsules are high-performance binary archives containing pre-compiled QuickJS bytecode, dependency edges, per-object SHA-256 digests, source maps, raw binary assets, and Ed25519 signatures. They contain AOT compiled engine bytecode, enabling zero-parsing <1ms cold starts.
 
-`verify` checks structure, graph completeness, compatibility, and object digests. It does not authenticate the publisher: artifact distribution still needs a trusted digest or signature. Source maps include original source content; do not place secrets in source or packaged assets.
+`verify` checks structure, graph completeness, compatibility, object digests, and validates the Ed25519 publisher signature. Source maps include original source content; do not place secrets in source or packaged assets.
 
 ## Dependencies from esm.sh and UNPKG
 

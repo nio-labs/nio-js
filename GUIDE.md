@@ -359,25 +359,28 @@ nio-js build app.ts --offline --frozen -o app.njs
 
 ## 8. Capsules (`.njs`) & Production Deployment
 
-An `.njs` capsule is a single, self-contained, tamper-proof JSON artifact containing:
-1. All compiled modules and graph edge definitions.
+An `.njs` capsule is a single, self-contained, tamper-proof binary artifact containing:
+1. All pre-compiled QuickJS bytecode and graph edge definitions.
 2. SHA-256 integrity digests for every module and bundled asset.
-3. Embedded static assets.
-4. Declared permissions and capabilities.
+3. Embedded static assets as raw bytes.
+4. An Ed25519 cryptographic publisher signature.
 
 ### Building & Verifying Capsules
 
 ```bash
-# 1. Compile into a capsule
-nio-js build app.ts -o dist/app.njs
+# 1. Generate an Ed25519 publisher key
+nio-js keys gen --email admin@example.com
 
-# 2. Inspect capsule contents and dependencies
+# 2. Compile and sign a capsule
+nio-js build app.ts --sign admin@example.com -o dist/app.njs
+
+# 3. Inspect capsule contents and dependencies
 nio-js inspect dist/app.njs
 
-# 3. Cryptographically verify integrity
+# 4. Cryptographically verify signature and integrity
 nio-js verify dist/app.njs
 
-# 4. Run the capsule in production (zero source files or network needed)
+# 5. Run the capsule in production (zero-parsing <1ms cold starts)
 nio-js run dist/app.njs --host 0.0.0.0 --port 8080 --workers 4
 ```
 
@@ -472,7 +475,7 @@ nio-js mcp
 **A:** No. NioJS is a backend worker runtime, optimized for high-throughput HTTP APIs, AI agent execution, and computationally heavy microservices. For full-stack apps, you should build your frontend (Vue, React, Svelte) statically and serve it alongside your NioJS backend API.
 
 ### Q: What exactly is a `.njs` capsule?
-**A:** A capsule is a single-file, tamper-proof deployment artifact. When you run `nio-js build`, it bundles your Javascript, downloaded ESM dependencies, FFI bindings, and asset files into one immutable payload that executes without needing `node_modules` on the server.
+**A:** A capsule is a single-file, tamper-proof deployment artifact. When you run `nio-js build`, it compiles your TypeScript/JavaScript into Ahead-of-Time (AOT) QuickJS bytecode and bundles it alongside downloaded ESM dependencies, FFI bindings, and asset files into one immutable binary payload. This binary executes with <1ms cold starts without needing `node_modules` on the server and is signed cryptographically for security.
 
 ### Q: How does `/** @native */` differ from Zig FFI?
 **A:** `/** @native */` is a zero-config directive that tells the Rust host to dynamically compile your Javascript math loops into machine code under the hood. Zig FFI is used when you explicitly want to write raw C/Zig code and bind it manually to your project for things like cryptography.
