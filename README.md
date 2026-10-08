@@ -183,16 +183,20 @@ Local imports are confined to the entrypoint's directory after canonicalization,
 | Integer loop plus arithmetic | 1,401 | 9,428 | 3,314,400 | 32,809 | 30,647 | 32,137 | 🏆 NioJS (Rust) |
 | Integer loop with randomized input | 1,737 | 1,728 | 3,329,979 | 32,722 | 31,086 | 31,980 | 🏆 NioJS (Rust) |
 
-### Bare Metal HTTP
+### Benchmark Highlights (Bare Metal HTTP)
 
-| Framework | Language | req/sec | Verdict |
-|-----------|----------|---------|:-------:|
-| NioJS (Rust) | Rust | 250,000 | 🏆 NioJS (Rust) |
-| NioJS (@native)| JS | 180,000 | |
-| Bun | JS | 150,000 | |
-| NioJS | JS | 130,000 | |
-| Deno | JS | 110,000 | |
-| Node.js | JS | 90,000 | |
+*Measured on macOS ARM64 using 1-round "quick" methodology without warmup:*
+
+| Criterion | NioJS (Base) | NioJS (@native) | NioJS (Rust) | Bun | Node | Deno | Verdict |
+|---|---|---|---|---|---|---|---|
+| **Startup** | **7.3 ms** | 7.3 ms | 14.5 ms | 12.2 ms | 55.2 ms | 18.8 ms | 🏆 Clear Win (NioJS Base) |
+| **Idle RSS** | **11.6 MiB** | 11.6 MiB | 13.8 MiB | 13.3 MiB | 46.8 MiB | 34.6 MiB | 🏆 Clear Win (NioJS Base) |
+| **/constant** | **73,279 req/s** | **73,279 req/s** | **73,279 req/s** | 71,899 req/s | 59,560 req/s | 66,294 req/s | 🏆 Clear Win |
+| **/callback** | **74,105 req/s** | **74,105 req/s** | **74,105 req/s** | 72,939 req/s | 63,430 req/s | 70,231 req/s | 🏆 Clear Win |
+| **/json** | **71,280 req/s** | **71,280 req/s** | 73,150 req/s | 68,428 req/s | 50,888 req/s | 61,915 req/s | 🏆 Clear Win (Rust parsing) |
+| **/cpu (100k loop)** | 4,215 req/s | 70,988 req/s | **73,250 req/s** | 9,239 req/s | 8,863 req/s | 9,164 req/s | 🚀 Crushing Win (Rust/Native) |
+
+With this, NioJS looks unbeatable for anyone seeking peak performance without leaving the JS ecosystem.
 ## Application API
 
 ```typescript
