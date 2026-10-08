@@ -1,2 +1,0 @@
-[tasks]
-echo_test = "echo Hello from NioJS task runner!"
