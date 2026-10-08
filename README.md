@@ -193,7 +193,6 @@ Local imports are confined to the entrypoint's directory after canonicalization,
 | NioJS | JS | 130,000 | |
 | Deno | JS | 110,000 | |
 | Node.js | JS | 90,000 | |
-\n
 ## Application API
 
 ```typescript
