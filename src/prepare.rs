@@ -19,7 +19,8 @@ use std::{
 };
 use url::Url;
 
-pub const FORMAT: u32 = 1;
+pub const FORMAT: u32 = 2;
+pub const MAGIC: &[u8; 4] = b"NIO\x01";
 pub const MAX_MODULE: usize = 16 * 1024 * 1024;
 pub const MAX_CAPSULE: usize = 64 * 1024 * 1024;
 pub fn hash(bytes: &[u8]) -> String {
@@ -28,7 +29,7 @@ pub fn hash(bytes: &[u8]) -> String {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Object {
-    pub code: String,
+    pub bytecode: Vec<u8>,
     pub integrity: String,
     pub source_integrity: String,
     pub source_map: String,
@@ -38,17 +39,19 @@ pub struct Object {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Capsule {
+    pub magic: [u8; 4],
     pub format: u32,
     pub runtime: String,
     pub entry: String,
     pub modules: BTreeMap<String, Object>,
     pub network: Vec<String>,
     pub assets: BTreeMap<String, Asset>,
+    pub signature: Option<Vec<u8>>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Asset {
-    pub body: String,
+    pub body: Vec<u8>,
     pub integrity: String,
     pub media_type: String,
 }
@@ -752,11 +755,20 @@ pub fn prepare(entry: &Path, options: &Options) -> Result<Capsule> {
             queue.push_back(dep.clone());
             imports.insert(spec, dep);
         }
+
+        let rt = rquickjs::Runtime::new()?;
+        let ctx = rquickjs::Context::full(&rt)?;
+        let bytecode = ctx.with(|ctx| -> anyhow::Result<Vec<u8>> {
+            let m = rquickjs::Module::declare(ctx, id.as_str(), code)?;
+            m.write(rquickjs::module::WriteOptions::default())
+                .map_err(|e| anyhow::anyhow!("qjs write failed: {}", e))
+        })?;
+
         modules.insert(
             id,
             Object {
-                integrity: hash(code.as_bytes()),
-                code,
+                integrity: hash(&bytecode),
+                bytecode,
                 source_integrity,
                 source_map_integrity: hash(source_map.as_bytes()),
                 source_map,
@@ -810,7 +822,7 @@ pub fn prepare(entry: &Path, options: &Options) -> Result<Capsule> {
                     name.into(),
                     Asset {
                         integrity: hash(&bytes),
-                        body: STANDARD.encode(bytes),
+                        body: bytes,
                         media_type: media_type.into()
                     }
                 )
@@ -819,12 +831,14 @@ pub fn prepare(entry: &Path, options: &Options) -> Result<Capsule> {
         );
     }
     let capsule = Capsule {
+        magic: *MAGIC,
         format: FORMAT,
         runtime: "nio-js/0.1".into(),
         entry: entry_id,
         modules,
         network: options.network.clone(),
         assets,
+        signature: None,
     };
     validate(&capsule)?;
     Ok(capsule)
@@ -839,7 +853,7 @@ pub fn validate(c: &Capsule) -> Result<()> {
         "invalid capsule entry or module count"
     );
     ensure!(
-        serde_json::to_vec(c)?.len() <= MAX_CAPSULE,
+        bincode::serialize(c)?.len() <= MAX_CAPSULE,
         "capsule too large"
     );
     for (name, object) in &c.modules {
@@ -849,7 +863,7 @@ pub fn validate(c: &Capsule) -> Result<()> {
             "invalid module identifier"
         );
         ensure!(
-            object.code.len() <= MAX_MODULE && hash(object.code.as_bytes()) == object.integrity,
+            object.bytecode.len() <= MAX_MODULE && hash(&object.bytecode) == object.integrity,
             "module integrity mismatch: {name}"
         );
         ensure!(
@@ -865,17 +879,7 @@ pub fn validate(c: &Capsule) -> Result<()> {
                     .all(|b| b.is_ascii_hexdigit()),
             "invalid source digest"
         );
-        let compile_name = name
-            .trim_end_matches(".ts")
-            .trim_end_matches(".rs")
-            .trim_end_matches(".py")
-            .trim_end_matches(".zig");
-        let compile_name = format!("{}.js", compile_name);
-        let (_, specs, _) = compile(&compile_name, &object.code)?;
-        ensure!(
-            specs.iter().all(|s| object.imports.contains_key(s)),
-            "capsule has an unrecorded import: {name}"
-        );
+
         for dep in object.imports.values() {
             ensure!(
                 dep == "nio.js" || c.modules.contains_key(dep),
@@ -883,7 +887,6 @@ pub fn validate(c: &Capsule) -> Result<()> {
             );
         }
     }
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
     ensure!(c.assets.len() <= 256, "too many assets");
     for (name, asset) in &c.assets {
         ensure!(
@@ -892,9 +895,8 @@ pub fn validate(c: &Capsule) -> Result<()> {
                 && !name.split('/').any(|s| matches!(s, ".." | "." | "")),
             "invalid asset name"
         );
-        let bytes = STANDARD.decode(&asset.body)?;
         ensure!(
-            bytes.len() <= MAX_MODULE && hash(&bytes) == asset.integrity,
+            asset.body.len() <= MAX_MODULE && hash(&asset.body) == asset.integrity,
             "asset integrity mismatch"
         );
     }
@@ -905,7 +907,9 @@ pub fn read_capsule(path: &Path) -> Result<Capsule> {
         fs::metadata(path)?.len() <= MAX_CAPSULE as u64,
         "capsule too large"
     );
-    let c = serde_json::from_slice(&fs::read(path)?)?;
+    let bytes = fs::read(path)?;
+    let c: Capsule = bincode::deserialize(&bytes)?;
+    ensure!(&c.magic == MAGIC, "invalid capsule magic");
     validate(&c)?;
     Ok(c)
 }
@@ -922,8 +926,9 @@ mod tests {
         fs::write(dir.path().join("dep.ts"), "export const n: number = 42")?;
         let mut c = prepare(&dir.path().join("main.ts"), &Options::default())?;
         assert_eq!(c.modules.len(), 2);
-        assert!(!c.modules[&c.entry].code.contains(": number"));
-        c.modules.get_mut(&c.entry).unwrap().code.push_str("evil()");
+        let bytecode = &c.modules[&c.entry].bytecode;
+        assert!(bytecode.len() > 0);
+        c.modules.get_mut(&c.entry).unwrap().bytecode.push(0x00);
         assert!(validate(&c).is_err());
         Ok(())
     }

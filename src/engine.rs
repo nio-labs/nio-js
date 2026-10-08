@@ -188,17 +188,17 @@ impl Loader for Graph {
                 "import attributes unsupported",
             ));
         }
-        let code = if name == "nio.js" {
-            include_str!("../runtime/nio.js")
-        } else {
-            &self
-                .0
-                .modules
-                .get(name)
-                .ok_or_else(|| rquickjs::Error::new_loading(name))?
-                .code
-        };
-        Module::declare(ctx.clone(), name, code)
+        if name == "nio.js" {
+            let code = include_str!("../runtime/nio.js");
+            return Module::declare(ctx.clone(), name, code);
+        }
+        let bytecode = &self
+            .0
+            .modules
+            .get(name)
+            .ok_or_else(|| rquickjs::Error::new_loading(name))?
+            .bytecode;
+        unsafe { Module::load(ctx.clone(), bytecode) }
     }
 }
 struct Completion {
@@ -379,7 +379,11 @@ impl Engine {
                 }); Ok(())
             })?)?;
             ctx.eval::<(),_>(include_str!("../runtime/bootstrap.js")).catch(&ctx).map_err(|e|anyhow::anyhow!("bootstrap: {e}"))?;
-            let promise = Module::evaluate(ctx.clone(),capsule.entry.as_str(),capsule.modules[&capsule.entry].code.as_str()).catch(&ctx).map_err(|e|anyhow::anyhow!(mapped_diagnostic(&capsule,&format!("entry module: {e}"))))?;
+            let promise: rquickjs::Promise = unsafe {
+                Module::load(ctx.clone(), &capsule.modules[&capsule.entry].bytecode)
+            }.and_then(|m| m.eval().map(|(_, p)| p))
+            .catch(&ctx)
+            .map_err(|e| anyhow::anyhow!(mapped_diagnostic(&capsule, &format!("entry module: {e}"))))?;
             ctx.globals().set("__nioEntry",promise)?;
             Ok(())
         })?;
@@ -815,7 +819,7 @@ get('/disable-stringify', () => { JSON.stringify = () => '"changed"'; return 'ok
                 .capsule
                 .modules
                 .values()
-                .any(|module| module.code.contains("__nioAttachNativeJson"))
+                .any(|module| module.bytecode.windows(21).any(|w| w == b"__nioAttachNativeJson"))
         );
         let json: serde_json::Value = serde_json::from_str(&text(engine.dispatch(0, input())?))?;
         assert_eq!(json["message"], "Hello World");

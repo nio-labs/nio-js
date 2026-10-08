@@ -105,6 +105,18 @@ enum Command {
     Verify {
         file: PathBuf,
     },
+    Keys {
+        #[command(subcommand)]
+        cmd: KeysCommand,
+    },
+}
+
+#[derive(clap::Subcommand, Clone)]
+enum KeysCommand {
+    Gen {
+        #[arg(long)]
+        email: String,
+    },
 }
 #[derive(clap::Args)]
 struct Preparation {
@@ -324,6 +336,22 @@ fn main_result() -> Result<()> {
             prepare::read_capsule(&file)?;
             println!("Verified {}", file.display());
         }
+        Command::Keys { cmd } => match cmd {
+            KeysCommand::Gen { email } => {
+                use ed25519_dalek::SigningKey;
+                use rand::RngCore;
+                let mut bytes = [0u8; 32];
+                rand::rngs::OsRng.fill_bytes(&mut bytes);
+                let signing_key = SigningKey::from_bytes(&bytes);
+                let home_dir = std::env::var("HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| PathBuf::from("."));
+                let dir = home_dir.join(".nio").join("keys");
+                std::fs::create_dir_all(&dir)?;
+                std::fs::write(dir.join(format!("{}.key", email)), signing_key.to_bytes())?;
+                println!("Generated key for {}", email);
+            }
+        },
         Command::Exec {
             file,
             args: _args,
