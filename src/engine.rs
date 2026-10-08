@@ -246,7 +246,7 @@ impl Engine {
             globals.set("__nioMaxBody",max as u32)?;
             globals.set("__nioAsset",Function::new(ctx.clone(),move |name:String| -> rquickjs::Result<String> {
                 let asset=assets.get(&name).ok_or(rquickjs::Error::Unknown)?;
-                serde_json::to_string(asset).map_err(|_|rquickjs::Error::Unknown)
+                serde_json::to_string(&serde_json::json!({"body":base64::engine::general_purpose::STANDARD.encode(&asset.body), "media_type":asset.media_type})).map_err(|_|rquickjs::Error::Unknown)
             })?)?;
             let native_functions = std::rc::Rc::new(std::cell::RefCell::new(Vec::<crate::native::Executable>::new()));
             let compiled = native_functions.clone();
@@ -283,30 +283,7 @@ impl Engine {
                 let functions=raw_json_functions.borrow();let plan=functions.get(id as usize).ok_or(rquickjs::Error::Unknown)?;
                 plan.run_raw(&args,*raw_json_deadline.lock().unwrap(),max).map_err(|e|rquickjs::Error::new_loading_message("native JSON",e.to_string()))
             })?)?;
-            fn create_rust_loader<'js>(ctx: Ctx<'js>) -> rquickjs::Result<Function<'js>> {
-                Function::new(ctx.clone(), move |ctx: Ctx<'js>, b64: String| -> rquickjs::Result<Object<'js>> {
-                    let bytes = base64::engine::general_purpose::STANDARD.decode(&b64).unwrap();
-                    let temp_so = std::env::temp_dir().join(format!("plugin_{}.so", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
-                    std::fs::write(&temp_so, &bytes).unwrap();
-                    let lib = unsafe { libloading::Library::new(&temp_so).unwrap() };
-                    let lib = Box::leak(Box::new(lib));
-                    let obj = Object::new(ctx.clone()).unwrap();
-                    obj.set("get", Function::new(ctx.clone(), move |ctx2: Ctx<'js>, name: String| -> rquickjs::Result<Function<'js>> {
-                        let sym_name = std::ffi::CString::new(name).unwrap();
-                        let sym: Result<libloading::Symbol<unsafe extern "C" fn(f64) -> f64>, _> = unsafe { lib.get(sym_name.as_bytes()) };
-                        if let Ok(symbol) = sym {
-                            let func_ptr = *symbol;
-                            Ok(Function::new(ctx2, move |arg: f64| -> f64 {
-                                unsafe { func_ptr(arg) }
-                            }).unwrap())
-                        } else {
-                            Err(rquickjs::Error::Unknown)
-                        }
-                    }).unwrap()).unwrap();
-                    Ok(obj)
-                })
-            }
-            globals.set("__loadRust", create_rust_loader(ctx.clone())?)?;
+            globals.set("__loadNative", crate::ffi::loader(ctx.clone())?)?;
             globals.set("__nioNative", Function::new(ctx.clone(), move |name: String| -> rquickjs::Result<String> {
                 match name.as_str() {
                     "cpu" => {
@@ -814,13 +791,12 @@ get('/disable-stringify', () => { JSON.stringify = () => '"changed"'; return 'ok
 "#,
             1000,
         )?;
-        assert!(
-            engine
-                .capsule
-                .modules
-                .values()
-                .any(|module| module.bytecode.windows(21).any(|w| w == b"__nioAttachNativeJson"))
-        );
+        assert!(engine.capsule.modules.values().any(|module| {
+            module
+                .bytecode
+                .windows(21)
+                .any(|w| w == b"__nioAttachNativeJson")
+        }));
         let json: serde_json::Value = serde_json::from_str(&text(engine.dispatch(0, input())?))?;
         assert_eq!(json["message"], "Hello World");
         assert_eq!(json["items"][2]["name"], "item-2");

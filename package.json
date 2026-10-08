@@ -6,7 +6,7 @@
   "type": "module",
   "bin": { "nio-js": "bin/nio-js.cjs" },
   "types": "types/nio.d.ts",
-  "files": ["bin/", "types/", "README.md", "NIOJS.md", "LICENSE"],
+  "files": ["bin/", "types/", "README.md", "NIOJS.md", "NATIVE_FFI.md", "LICENSE"],
   "repository": { "type": "git", "url": "git+https://github.com/nio-labs/nio-js.git" },
   "homepage": "https://github.com/nio-labs/nio-js#readme",
   "bugs": "https://github.com/nio-labs/nio-js/issues",

@@ -1,9 +1,13 @@
 package main
 
+/*
+#include <stdlib.h>
+*/
 import "C"
 import (
 	"encoding/json"
 	"math/rand"
+    "unsafe"
 )
 
 //export FetchClusterStatus
@@ -20,3 +24,6 @@ func FetchClusterStatus() *C.char {
 }
 
 func main() {} // Required for cgo shared library
+
+//export FreeCString
+func FreeCString(value *C.char) { C.free(unsafe.Pointer(value)) }

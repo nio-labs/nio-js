@@ -5,9 +5,13 @@ This example demonstrates the full power of **The Hybrid Runtime** by combining 
 ## Architecture
 
 - **TypeScript**: Handles HTTP routing, JSON validation, and overall pipeline orchestration.
-- **Zig (`crypto.zig`)**: Dynamically compiled via FFI to perform ultra-fast cryptographic signature verification using raw C-ABI.
+- **Zig (`crypto.zig`)**: Compiled during preparation and called through the two-argument C ABI to simulate signature validation.
 - **Python (`ml_model.py`)**: Executes an in-process ML inference model to predict transaction fraud probability.
 - **Rust (`/** @native */`)**: Offloads computationally heavy map-reduce operations (scanning transaction history) directly to the Rust multi-worker host.
+
+## Prerequisites
+
+Install Zig and use a NioJS runtime built with `cargo build --release --features python`. Keep the Python shared library available on deployment. Native libraries and bytecode require the same runtime version, OS, and CPU architecture. The Zig signature check and Python risk model are simulations, not production fraud or cryptographic validation.
 
 ## 🚀 Running the Service
 

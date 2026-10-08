@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Single-File Capsules — Build once. Deploy one file. | NioJS</title>
+  <meta name="description" content="Package a NioJS service into one .njs capsule: precompiled modules, assets, integrity checks, optional publisher signing, and standalone executables. A complete build and deployment guide.">
+  <link rel="canonical" href="https://nio-labs.github.io/nio-js/capsules.html">
+  <meta property="og:title" content="Single-File Capsules | NioJS">
+  <meta property="og:description" content="Build once. Deploy one file. Learn how to package, sign, verify, and deploy your NioJS application.">
+  <meta property="og:url" content="https://nio-labs.github.io/nio-js/capsules.html">
+  <meta property="og:type" content="article">
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Code:ital,wght@0,400..700;1,400..700&family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+
+<body class="capsule-page">
+  <!-- Mobile Hamburger Header -->
+  <header class="mobile-header">
+    <button class="hamburger-btn" id="menuToggle" aria-label="Toggle navigation" aria-controls="sidebar" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+    <a href="index.html" class="brand-title">
+      <img class="brand-logo" src="logo.svg" alt="NioJS Logo">
+      <span class="brand-name">NioJS</span>
+      <span class="badge">v0.3.0</span>
+    </a>
+  </header>
+
+  <a href="#main-content" class="capsule-skip-link">Skip to content</a>
+  <div class="layout">
+    <!-- Left Navigation Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <a href="index.html" class="sidebar-brand">
+          <img class="brand-logo" src="logo.svg" alt="NioJS Logo">
+          <div>
+            <div class="brand-name">NioJS</div>
+            <div class="brand-sub">Agent-Native Worker Runtime</div>
+          </div>
+        </a>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="Capsule guide navigation">
+        <div class="nav-section"><div class="nav-section-title">NioJS Documentation</div>
+          <a href="index.html" class="nav-link">Documentation home</a>
+          <a href="capsules.html" class="nav-link" aria-current="page">Single-File Capsules</a>
+          <a href="native.html" class="nav-link">Native Acceleration</a>
+          <a href="python.html" class="nav-link">In-Process Python</a>
+        </div>
+        <div class="nav-section"><div class="nav-section-title">On this page</div>
+          <a href="#capsule-overview" class="nav-link active">Overview</a>
+          <a href="#why-capsules" class="nav-link">Why capsules</a>
+          <a href="#inside-a-capsule" class="nav-link">Inside the artifact</a>
+          <a href="#capsule-lifecycle" class="nav-link">Build → deploy lifecycle</a>
+          <a href="#quickstart" class="nav-link">Your first capsule</a>
+          <a href="#locked-builds" class="nav-link">Dependencies & lockfiles</a>
+          <a href="#assets-and-hybrid" class="nav-link">Assets & hybrid code</a>
+          <a href="#publisher-signing" class="nav-link">Publisher signing</a>
+          <a href="#deployment-options" class="nav-link">Deployment formats</a>
+          <a href="#release-workflow" class="nav-link">Release workflow</a>
+          <a href="#compatibility" class="nav-link">Compatibility & limits</a>
+          <a href="#capsule-faq" class="nav-link">Questions before shipping</a>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="https://github.com/nio-labs/nio-js" target="_blank" rel="noreferrer" class="github-link">
+          <svg height="18" width="18" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+          </svg>
+          <span>GitHub: nio-labs/nio-js</span>
+        </a>
+      </div>
+    </aside>
+
+    <main class="content-wrapper" id="main-content">
+      <div class="content-container">
+        <section id="capsule-overview" class="doc-section capsule-hero">
+          <div class="hero-badges"><span class="badge badge-accent">Single-File Capsules</span><span class="badge">Capsule v2 · NJSB</span></div>
+          <div class="capsule-hero-grid">
+            <div>
+              <p class="capsule-eyebrow">Your application, ready to ship.</p>
+              <h1>Build once.<br>Deploy one file.</h1>
+              <p class="capsule-intro">Turn your TypeScript service, its imported modules, and its packaged assets into one <code>.njs</code> artifact. Verify it. Move it between matching environments. Run the same application you tested.</p>
+              <div class="capsule-actions"><a class="capsule-button" href="#quickstart">Build your first capsule</a><a class="capsule-button capsule-button-secondary" href="#deployment-options">Choose a deployment format</a></div>
+            </div>
+            <figure class="capsule-artifact" aria-label="An app.njs capsule contains compiled application modules, dependency edges, assets, integrity digests, and an optional publisher signature.">
+              <div class="capsule-file-heading"><span class="capsule-file-icon" aria-hidden="true">.njs</span><div><strong>app.njs</strong><span>One application artifact</span></div><span class="capsule-format">NJSB</span></div>
+              <ul class="capsule-contents"><li><span>01</span>Precompiled application modules</li><li><span>02</span>Resolved dependency graph</li><li><span>03</span>Packaged assets &amp; source maps</li><li><span>04</span>SHA-256 object digests</li><li><span>05</span>Optional Ed25519 signature</li></ul>
+              <figcaption>Run with NioJS, or embed into a standalone executable.</figcaption>
+            </figure>
+          </div>
+          <div class="capsule-benefits"><article><h2>One artifact to promote</h2><p>Use the same file in staging and production on matching platforms.</p></article><article><h2>No dependency install at deploy</h2><p>The prepared module graph travels with your application.</p></article><article><h2>A release you can verify</h2><p>Inspect its metadata and check a trusted publisher before execution.</p></article></div>
+        </section>
+
+        <section id="why-capsules" class="doc-section">
+          <h2>Why a capsule changes deployment</h2>
+          <p>A service usually starts as a collection of source files, dependencies, and assets. A capsule gives that collection a single deployment identity. The build machine resolves and prepares the application; the deployment machine runs the resulting file.</p>
+          <p>This makes a release easy to pass between a developer, a CI pipeline, a staging service, and production. You can store it in an artifact registry, attach it to a release, copy it to a server, and retain it for rollback. The capsule does not need your source directory or dependency download cache to execute.</p>
+          <p>The practical advantage is control over what reaches production. Your deployment uses the prepared dependency graph rather than resolving module URLs again. A publisher signature can bind the application, graph metadata, assets, and declared network requirements to a key your deployment trusts.</p>
+          <div class="callout callout-info"><strong>The deployment contract:</strong> a <code>.njs</code> capsule needs a compatible NioJS runtime. Build and run it with the same runtime version, operating system, and CPU architecture. A standalone executable includes that runtime; it still retains the platform's system-library requirements.</div>
+        </section>
+
+        <section id="inside-a-capsule" class="doc-section">
+          <h2>What is inside the file?</h2>
+          <p>Capsule v2 is a binary archive identified by the <code>NJSB</code> header. It records the application entrypoint and the modules needed to execute it. Use the CLI to inspect it; the binary layout is an implementation format, not a frozen interchange specification.</p>
+          <div class="table-container"><table><caption>Contents of a Capsule v2 application</caption><thead><tr><th scope="col">Component</th><th scope="col">What it carries</th><th scope="col">Why it matters</th></tr></thead><tbody>
+            <tr><th scope="row">Application modules</th><td>Precompiled QuickJS bytecode for prepared TypeScript and JavaScript.</td><td>Deployment does not need to transpile or parse those application sources.</td></tr>
+            <tr><th scope="row">Dependency edges</th><td>The recorded imports and their resolved module identifiers.</td><td>The application graph can execute without downloading those modules again.</td></tr>
+            <tr><th scope="row">Assets</th><td>Raw bytes, media types, and integrity digests for explicitly packaged files.</td><td>Serve a document, image, or configuration resource through <code>asset()</code>.</td></tr>
+            <tr><th scope="row">Source maps</th><td>Mappings and original source content used for diagnostics.</td><td>Errors can point back to your TypeScript. The capsule is not a source-confidentiality boundary.</td></tr>
+            <tr><th scope="row">Native imports</th><td>Embedded shared libraries and generated bindings when the application imports supported native sources.</td><td>The deployment machine does not need the compiler that built those libraries.</td></tr>
+            <tr><th scope="row">Release metadata</th><td>Format and runtime compatibility, object digests, and declared network requirements.</td><td>NioJS checks compatibility and integrity before executing the application.</td></tr>
+            <tr><th scope="row">Publisher identity</th><td>An optional Ed25519 signature and public key.</td><td>A separately trusted public key establishes which publisher signed the release.</td></tr>
+          </tbody></table></div>
+          <p>External databases, outbound services, Python installations, and system shared libraries remain deployment dependencies. Package assets explicitly with <code>--asset</code>; a build does not automatically copy every file in your project.</p>
+        </section>
+
+        <section id="capsule-lifecycle" class="doc-section">
+          <h2>From source to a running release</h2>
+          <ol class="capsule-lifecycle"><li><strong>Prepare the graph.</strong><span>NioJS reads the entrypoint, follows supported imports, resolves module URLs, and checks the dependency lockfile and cache.</span></li><li><strong>Compile and package.</strong><span>TypeScript becomes JavaScript, application modules become QuickJS bytecode, and selected assets join the binary archive. Native source imports are compiled on the build machine.</span></li><li><strong>Sign the release.</strong><span>If you supply a signing key, NioJS signs the capsule payload and records the publisher's public key.</span></li><li><strong>Promote the artifact.</strong><span>Copy the file you tested to another matching environment. Keep its runtime version and any required system libraries alongside your deployment configuration.</span></li><li><strong>Verify and execute.</strong><span>NioJS validates compatibility, structure, object digests, and any attached signature. <code>--public-key</code> additionally requires your trusted publisher.</span></li></ol>
+          <p>Capsules move preparation work to the build stage. They do not remove all startup work: workers still initialize, modules execute, routes register, and eligible <code>/** @native */</code> numeric plans compile to machine code at worker startup. Measure startup time for your actual service rather than assuming a universal latency.</p>
+        </section>
+
+        <section id="quickstart" class="doc-section">
+          <h2>Build your first capsule</h2>
+          <p>Start with a service that returns JSON and serves a packaged text file. Save this as <code>app.ts</code>:</p>
+          <pre class="language-typescript"><code class="language-typescript">import { get, asset } from 'nio.js';
+
+get('/', () =&gt; ({ service: 'capsule-demo', status: 'ready' }));
+get('/hello', asset('hello.txt'));</code></pre>
+          <p>Create the asset, build the application, and inspect the resulting file:</p>
+          <pre class="language-bash"><code class="language-bash">mkdir -p assets
+printf 'Hello from a packaged asset.\n' &gt; assets/hello.txt
+
+nio-js build app.ts --asset hello.txt=assets/hello.txt -o dist/app.njs
+nio-js inspect dist/app.njs
+nio-js verify dist/app.njs</code></pre>
+          <p>Run the artifact and check both routes:</p>
+          <pre class="language-bash"><code class="language-bash">nio-js run dist/app.njs --port 3000 --workers 1
+
+# In a second terminal:
+curl http://127.0.0.1:3000/
+curl http://127.0.0.1:3000/hello</code></pre>
+          <p>The first response is <code>{"service":"capsule-demo","status":"ready"}</code>. The second returns the text you packaged. Copy <code>dist/app.njs</code> to a separate directory with the matching runtime and repeat the run command. The service no longer needs <code>app.ts</code>, the asset source file, or the build cache.</p>
+          <p>This first capsule is unsigned. Add publisher signing when you need the deployment to enforce the identity of the release producer.</p>
+        </section>
+
+        <section id="locked-builds" class="doc-section">
+          <h2>Prepared dependencies, predictable inputs</h2>
+          <p>NioJS can prepare supported ESM dependencies from HTTPS URLs. The first successful preparation creates <code>nio.lock</code> next to the entrypoint. Commit that file so subsequent builds can check the pinned remote resolutions and source digests.</p>
+          <pre class="language-bash"><code class="language-bash"># Subsequent builds require the existing lockfile.
+nio-js build app.ts --frozen --asset hello.txt=assets/hello.txt -o dist/app.njs
+
+# With remote dependencies already available in the verified cache:
+nio-js build app.ts --offline --frozen --asset hello.txt=assets/hello.txt -o dist/app.njs</code></pre>
+          <p><code>--frozen</code> prevents the build from changing the lockfile. <code>--offline</code> prevents remote module downloads and requires those sources to be cached already. Intentional dependency changes use <code>--update</code> during preparation, followed by review of the resulting lockfile.</p>
+          <p>At execution time, the capsule already carries its prepared modules. An offline deployment can still have application-level network dependencies: packaging imports and allowing outbound requests are separate concerns. Read the <a href="index.html#dependencies">dependency and lockfile guide</a> for import policy and cache behavior.</p>
+        </section>
+
+        <section id="assets-and-hybrid" class="doc-section">
+          <h2>Package assets and hybrid application code</h2>
+          <h3>Assets get stable application names</h3>
+          <p>The left side of <code>--asset NAME=PATH</code> is the name your application uses; the right side is a build-machine file. Repeat the flag to package additional resources:</p>
+          <pre class="language-bash"><code class="language-bash">nio-js build app.ts -o dist/app.njs \
+  --asset hello.txt=assets/hello.txt \
+  --asset logo.svg=assets/logo.svg</code></pre>
+          <p><code>asset('logo.svg')</code> returns a Blob with the packaged bytes and media type. You can register that Blob as a constant route. It does not read the original file on the deployment machine.</p>
+          <h3>The capsule can carry native imports, too</h3>
+          <p>Local Rust, Zig, C, and Go imports compile into shared libraries during preparation. Their library bytes are embedded through the generated module bindings. Numeric exports support zero to four double arguments and a double result; Go also supports an owned, zero-argument C string result with an explicit release function.</p>
+          <div class="table-container"><table><caption>Hybrid build and deployment requirements</caption><thead><tr><th scope="col">Application code</th><th scope="col">Build machine</th><th scope="col">Deployment machine</th></tr></thead><tbody>
+            <tr><th scope="row">TypeScript / JavaScript</th><td>NioJS prepares and compiles the modules.</td><td>A matching NioJS runtime, or its standalone executable.</td></tr>
+            <tr><th scope="row">Rust / Zig / C / Go imports</th><td>The corresponding compiler; Go needs cgo and a C compiler. C uses <code>cc</code> or <code>CC</code>.</td><td>Matching native target, required system libraries, and a temporary directory that permits loading shared libraries.</td></tr>
+            <tr><th scope="row">Python imports</th><td>NioJS packages the Python module source through its bindings.</td><td>A runtime built with <code>--features python</code>, a compatible Python shared library, and any imported Python packages.</td></tr>
+            <tr><th scope="row"><code>/** @native */</code></th><td>NioJS prepares eligible optimization plans.</td><td>The runtime compiles numeric plans at worker startup; unsupported calls retain JavaScript behavior.</td></tr>
+          </tbody></table></div>
+          <p>Native libraries execute with process privileges. JavaScript heap, network, and timeout budgets do not sandbox their operations. Explore the <a href="index.html#hybrid-engine">hybrid engine</a>, <a href="native.html">native acceleration</a>, and <a href="python.html">Python guide</a> for the supported interfaces.</p>
+        </section>
+
+        <section id="publisher-signing" class="doc-section">
+          <h2>Sign a release. Verify its publisher.</h2>
+          <p>Object digests detect changed content, but digests alone do not establish who produced an application. Signing connects the capsule payload to an Ed25519 key. Your deployment must trust that key independently of the capsule it receives.</p>
+          <p>Generate a key pair on the build machine. This example uses an explicit output path suitable for a development or CI workflow:</p>
+          <pre class="language-bash"><code class="language-bash">nio-js keys gen --email releases@example.com --output publisher.key
+
+nio-js build app.ts -o dist/app.njs \
+  --asset hello.txt=assets/hello.txt \
+  --sign-key publisher.key</code></pre>
+          <p>The command writes a private <code>publisher.key</code> and a public <code>publisher.pub</code>. Existing key files are not overwritten. Keep the private key with your release producer; give deployment systems only the trusted public key.</p>
+          <pre class="language-bash"><code class="language-bash"># Check the artifact against a separately trusted public key.
+nio-js verify dist/app.njs --public-key publisher.pub
+
+# Check that same requirement immediately before execution.
+nio-js run dist/app.njs --public-key publisher.pub --port 3000</code></pre>
+          <p><code>--public-key</code> rejects unsigned capsules and capsules signed by another key. Without it, <code>verify</code> checks any attached signature using the public key carried inside the file; that checks consistency, but does not establish your trust in the publisher.</p>
+          <p>You can also use a named local identity: <code>keys gen --email releases@example.com</code> stores keys under your home directory's <code>.nio/keys</code>; <code>build --sign releases@example.com</code> selects that private key. <code>inspect</code> reports whether a capsule is signed and its publisher-key fingerprint.</p>
+        </section>
+
+        <section id="deployment-options" class="doc-section">
+          <h2>One application. Two ways to ship it.</h2>
+          <p>Choose whether your deployment manages the NioJS runtime separately or carries it inside the executable. Both formats use the prepared capsule.</p>
+          <div class="capsule-format-picker" data-format-picker>
+            <div class="capsule-format-tabs" role="tablist" aria-label="Deployment format" hidden>
+              <button type="button" role="tab" id="tab-capsule" aria-controls="panel-capsule" aria-selected="true" data-format="capsule">.njs capsule</button>
+              <button type="button" role="tab" id="tab-standalone" aria-controls="panel-standalone" aria-selected="false" tabindex="-1" data-format="standalone">Standalone executable</button>
+            </div>
+            <div id="panel-capsule" class="capsule-format-panel" data-panel="capsule">
+              <h3>Deploy the capsule with a managed runtime</h3>
+              <p>Use this when your servers or container images already provide the pinned NioJS runtime. The release artifact contains the application; runtime installation remains a separate deployment concern.</p>
+              <pre class="language-bash"><code class="language-bash">nio-js build app.ts -o dist/app.njs --asset hello.txt=assets/hello.txt
+nio-js run dist/app.njs --port 8080 --workers 4</code></pre>
+              <p class="capsule-format-equation"><strong>app.njs</strong><span aria-hidden="true">+</span><strong>matching NioJS runtime</strong><span aria-hidden="true">→</span><strong>running service</strong></p>
+            </div>
+            <div id="panel-standalone" class="capsule-format-panel" data-panel="standalone">
+              <h3>Deploy an executable with the runtime embedded</h3>
+              <p>Use this when the receiving machine should not need an installed NioJS CLI. The build embeds the capsule into the current Rust/Tokio runtime executable.</p>
+              <pre class="language-bash"><code class="language-bash">nio-js build app.ts -o dist/app.njs \
+  --asset hello.txt=assets/hello.txt --standalone dist/my-app
+
+./dist/my-app --port 8080 --workers 4</code></pre>
+              <p>On Windows, choose an <code>.exe</code> output name. The executable still depends on its target OS, architecture, and system libraries. Python-enabled builds retain their Python library requirements.</p>
+              <p class="capsule-format-equation"><strong>my-app</strong><span aria-hidden="true">=</span><strong>runtime + embedded capsule</strong></p>
+            </div>
+          </div>
+          <p>Signing works with either build. A signed standalone application can require its trusted key at startup with <code>./dist/my-app --public-key publisher.pub --port 8080</code>. Projects created by <code>nio-js init</code> include <code>host/nio.toml</code>, which also makes a build produce <code>my-app</code> (or <code>my-app.exe</code>). The supported host is Rust/Tokio.</p>
+        </section>
+
+        <section id="release-workflow" class="doc-section">
+          <h2>Promote the file you tested</h2>
+          <p>A practical release workflow separates building an application from operating it. Prepare it in CI, test the resulting capsule in staging, and promote that artifact to production on a matching target. Do not rebuild it merely because it is moving to the next environment.</p>
+          <pre class="language-bash"><code class="language-bash"># Build from reviewed, locked dependency inputs.
+nio-js build app.ts --frozen -o dist/app.njs \
+  --asset hello.txt=assets/hello.txt --sign-key publisher.key
+
+# Inspect and verify the release before promotion.
+nio-js inspect dist/app.njs
+nio-js verify dist/app.njs --public-key publisher.pub
+
+# Run the promoted artifact with the target runtime.
+nio-js run dist/app.njs --public-key publisher.pub \
+  --host 127.0.0.1 --port 8080 --workers 4</code></pre>
+          <p>Use a process supervisor for restart and shutdown, and put a TLS reverse proxy in front of a public HTTP service. Check an application health route after switching releases. Retain the previous capsule and its matching runtime so rollback means switching back to a known release.</p>
+          <h3>Declare the application's network requirements</h3>
+          <p>A capsule can record required outbound hosts. Deployment still has to grant those hosts explicitly; the capsule cannot grant itself network access.</p>
+          <pre class="language-bash"><code class="language-bash">nio-js build app.ts -o dist/app.njs --require-net api.example.com
+nio-js run dist/app.njs --allow-net api.example.com --port 8080</code></pre>
+          <p>This declaration is separate from the imported module graph. Native libraries and Python operations have process privileges and can access host resources outside the JavaScript fetch policy.</p>
+        </section>
+
+        <section id="compatibility" class="doc-section">
+          <h2>Know the artifact's deployment contract</h2>
+          <div class="table-container"><table><caption>Current capsule compatibility and limits</caption><thead><tr><th scope="col">Requirement</th><th scope="col">Current behavior</th></tr></thead><tbody>
+            <tr><th scope="row">Runtime and target</th><td>The runtime version, OS, and CPU architecture must match the build. Build a separate artifact for each deployment target.</td></tr>
+            <tr><th scope="row">Capsule size</th><td>At most 64 MiB for the binary capsule. Module objects and packaged assets are individually limited to 16 MiB; the source graph has an additional aggregate preparation budget.</td></tr>
+            <tr><th scope="row">Graph and assets</th><td>Up to 256 modules and 256 explicitly packaged assets.</td></tr>
+            <tr><th scope="row">Older capsules</th><td>Legacy JSON capsules must be rebuilt from source for Capsule v2. Existing supported dependency lockfiles remain usable.</td></tr>
+            <tr><th scope="row">Secrets and source</th><td>Source maps include original source content. Signing does not encrypt the capsule. Keep secrets out of source and packaged assets.</td></tr>
+            <tr><th scope="row">External resources</th><td>Databases, application services, system libraries, and Python packages are not automatically bundled.</td></tr>
+          </tbody></table></div>
+          <p>Run capsules from sources you trust. QuickJS bytecode and embedded native libraries are executable code; object hashing is not a substitute for publisher trust or operating-system isolation. This preview runtime is not a hardened sandbox for hostile applications.</p>
+        </section>
+
+        <section id="capsule-faq" class="doc-section">
+          <h2>Questions before you ship</h2>
+          <details class="capsule-faq" open><summary>Does “single file” mean no runtime is needed?</summary><p>A <code>.njs</code> file needs the compatible NioJS runtime. A <code>--standalone</code> build includes that runtime in the executable. Both retain relevant platform and shared-library requirements.</p></details>
+          <details class="capsule-faq"><summary>Can I copy one capsule to every operating system?</summary><p>The current format checks the runtime version, OS, and CPU architecture. Build and test a separate capsule or executable for each target. “Single file” describes the deployment artifact, not universal binary compatibility.</p></details>
+          <details class="capsule-faq"><summary>Will my server download dependencies on startup?</summary><p>Executing a capsule does not need to download its prepared application modules. Your application may still make outbound requests, and external services or Python packages remain separate requirements.</p></details>
+          <details class="capsule-faq"><summary>Is a capsule automatically signed?</summary><p>No. Use <code>--sign</code> or <code>--sign-key</code> at build time. Use a separately trusted public key with <code>verify</code>, <code>run</code>, or <code>exec</code> to enforce publisher identity.</p></details>
+          <details class="capsule-faq"><summary>Can I inspect or edit the packaged application?</summary><p><code>nio-js inspect</code> shows the entrypoint, module identifiers, assets, required network hosts, runtime compatibility, signature state, publisher fingerprint, and artifact digest. Rebuild to change the application. Capsule contents are not encrypted, and the source maps contain original source content.</p></details>
+          <details class="capsule-faq"><summary>Does this guarantee sub-millisecond startup?</summary><p>No fixed startup latency is guaranteed. Precompiled application modules avoid source parsing, but worker initialization, module evaluation, native bindings, Python initialization, and application logic still take time. Benchmark the artifact you intend to deploy.</p></details>
+          <details class="capsule-faq"><summary>How do I debug a failed release?</summary><p>Start with <code>inspect</code> and <code>verify</code>. Check the expected runtime and target, trusted publisher key, network grants, and required shared libraries. Keep source maps for mapped diagnostics. An “invalid capsule magic” error on a legacy JSON file means you need to rebuild it.</p></details>
+          <div class="capsule-endcap"><h3>Make your next release an artifact.</h3><p>Start with a small service. Package one asset. Run the capsule from a fresh directory. Then add your release key and promote the exact file you tested.</p><div class="capsule-actions"><a class="capsule-button" href="#quickstart">Start the walkthrough</a><a class="capsule-button capsule-button-secondary" href="index.html#real-world-examples">Explore example services</a></div></div>
+        </section>
+
+        <footer class="docs-footer" style="margin-top: 60px; text-align: center; color: var(--text-secondary); border-top: 1px solid var(--border-color); padding-top: 20px;">
+          <p>&copy; 2026 NioLabs. MIT Licensed.</p>
+        </footer>
+      </div>
+    </main>
+
+
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-powershell.min.js"></script>
+  <script src="app.js"></script>
+  <script src="capsules.js"></script>
+</body>
+</html>

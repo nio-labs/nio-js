@@ -6,7 +6,11 @@ This example showcases how **The Hybrid Runtime** bridges modern cloud-native ne
 
 - **TypeScript (`server.ts`)**: Handles the HTTP routing and JSON aggregation.
 - **Go (`network.go`)**: Brought in via `cgo`, Go provides the ultimate ecosystem for cloud-native networking (gRPC, Kubernetes APIs, Docker SDKs).
-- **Raw C (`legacy_parser.c`)**: Dynamically compiled **in-memory** by the runtime (using an embedded TinyCC bridge). No toolchains, no Makefiles—just instant execution of legacy C code.
+- **Raw C (`legacy_parser.c`)**: Compiled into a shared library during preparation using the system C compiler (`cc`, or `CC`). The library is embedded into the capsule.
+
+## Prerequisites
+
+Install Go with cgo enabled and a C compiler (`cc`, or set `CC`). Native libraries are built during preparation and embedded into capsules. Deploy with the same runtime version, OS, and architecture.
 
 ## 🚀 Running the Service
 

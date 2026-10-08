@@ -18,23 +18,29 @@ impl Drop for Service {
     }
 }
 fn launch(file: &std::path::Path, extra: &[&str]) -> Service {
+    launch_binary(
+        std::path::Path::new(env!("CARGO_BIN_EXE_nio-js")),
+        &["run", file.to_str().unwrap()],
+        extra,
+    )
+}
+fn launch_binary(binary: &std::path::Path, prefix: &[&str], extra: &[&str]) -> Service {
     let socket = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = socket.local_addr().unwrap().port();
     drop(socket);
-    let child = Command::new(env!("CARGO_BIN_EXE_nio-js"))
+    let child = Command::new(binary)
+        .args(prefix)
         .args([
-            "run",
-            file.to_str().unwrap(),
             "--port",
             &port.to_string(),
             "--timeout-ms",
-            "100",
+            "1000",
             "--max-body",
             "1024",
         ])
         .args(extra)
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::inherit())
         .spawn()
         .unwrap();
     let mut s = Service {
@@ -164,7 +170,7 @@ post('/upload',async({formData})=>{const f=(await formData()).get('file');return
             .success()
     );
     // Delete the entire source graph: the artifact must be sufficient for execution.
-    fs::remove_file(source).unwrap();
+    fs::remove_file(&source).unwrap();
     fs::remove_file(dir.path().join("nio.lock")).unwrap();
     let service = launch(&capsule, &["--offline"]);
     assert_eq!(
@@ -176,9 +182,9 @@ post('/upload',async({formData})=>{const f=(await formData()).get('file');return
         "Hello World"
     );
     drop(service);
-    let mut artifact: Value = serde_json::from_slice(&fs::read(&capsule).unwrap()).unwrap();
-    artifact["modules"]["nio-src:///server.ts"]["code"] = json!("console.log('tampered')");
-    fs::write(&capsule, serde_json::to_vec(&artifact).unwrap()).unwrap();
+    let mut artifact = fs::read(&capsule).unwrap();
+    artifact[0] ^= 1;
+    fs::write(&capsule, artifact).unwrap();
     assert!(
         !Command::new(env!("CARGO_BIN_EXE_nio-js"))
             .args(["verify", capsule.to_str().unwrap()])
@@ -210,7 +216,7 @@ fn packaged_assets_and_required_capabilities() {
             .unwrap()
             .success()
     );
-    fs::remove_file(source).unwrap();
+    fs::remove_file(&source).unwrap();
     fs::remove_file(data).unwrap();
     let service = launch(&capsule, &[]);
     let c = Client::builder()
@@ -230,9 +236,26 @@ fn packaged_assets_and_required_capabilities() {
     assert_eq!(r.status(), 302);
     assert_eq!(r.headers()["location"], "https://example.com");
     drop(service);
-    let mut artifact: Value = serde_json::from_slice(&fs::read(&capsule).unwrap()).unwrap();
-    artifact["network"] = json!(["example.com"]);
-    fs::write(&capsule, serde_json::to_vec(&artifact).unwrap()).unwrap();
+    fs::write(
+        &source,
+        "import {get} from 'nio.js'; get('/', 'capabilities');",
+    )
+    .unwrap();
+    assert!(
+        Command::new(env!("CARGO_BIN_EXE_nio-js"))
+            .args([
+                "build",
+                source.to_str().unwrap(),
+                "--frozen",
+                "--require-net",
+                "example.com",
+                "-o",
+                capsule.to_str().unwrap()
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
     let result = Command::new(env!("CARGO_BIN_EXE_nio-js"))
         .args(["run", capsule.to_str().unwrap()])
         .output()
@@ -322,4 +345,358 @@ fn cdn_imports_execute_then_rebuild_offline() {
         .unwrap();
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid lock digest"));
+}
+
+#[test]
+fn standalone_runs_without_sources_or_capsule() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("main.ts");
+    let capsule = dir.path().join("main.njs");
+    let executable = dir.path().join(if cfg!(windows) {
+        "service.exe"
+    } else {
+        "service"
+    });
+    fs::write(
+        &source,
+        "import {get} from 'nio.js'; get('/', () => 'embedded');",
+    )
+    .unwrap();
+    assert!(
+        Command::new(env!("CARGO_BIN_EXE_nio-js"))
+            .args([
+                "build",
+                source.to_str().unwrap(),
+                "-o",
+                capsule.to_str().unwrap(),
+                "--standalone",
+                executable.to_str().unwrap()
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+    fs::remove_file(&source).unwrap();
+    fs::remove_file(capsule).unwrap();
+    fs::remove_file(dir.path().join("nio.lock")).unwrap();
+    let service = launch_binary(&executable, &[], &["--workers", "1"]);
+    assert_eq!(
+        Client::new()
+            .get(format!("{}/", service.url))
+            .send()
+            .unwrap()
+            .text()
+            .unwrap(),
+        "embedded"
+    );
+}
+
+#[test]
+#[ignore = "requires C, Rust, Go and Zig compilers on PATH"]
+fn native_language_capsule_roundtrip() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("math.c"),
+        "double add(double a, double b) { return a + b; }",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("math.rs"),
+        "#[unsafe(no_mangle)]\npub extern \"C\" fn sum(a: f64, b: f64, c: f64) -> f64 { a+b+c }",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("math.zig"),
+        "export fn multiply(a: f64, b: f64) f64 { return a*b; }",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("text.go"),
+        r#"package main
+/*
+#include <stdlib.h>
+*/
+import "C"
+import "unsafe"
+//export Text
+func Text() *C.char { return C.CString("owned-go-string") }
+//export FreeCString
+func FreeCString(value *C.char) { C.free(unsafe.Pointer(value)) }
+func main() {}
+"#,
+    )
+    .unwrap();
+    let source = dir.path().join("server.ts");
+    let capsule = dir.path().join("server.njs");
+    fs::write(
+        &source,
+        r#"
+import {get} from 'nio.js';
+import {add} from './math.c';
+import {sum} from './math.rs';
+import {multiply} from './math.zig';
+import {Text} from './text.go';
+get('/', () => [add(1.5, 2.5), sum(1,2,3), multiply(2,3.5), Text()]);
+get('/invalid', () => add(1));
+"#,
+    )
+    .unwrap();
+    assert!(
+        Command::new(env!("CARGO_BIN_EXE_nio-js"))
+            .args([
+                "build",
+                source.to_str().unwrap(),
+                "-o",
+                capsule.to_str().unwrap()
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+    for name in [
+        "server.ts",
+        "math.c",
+        "math.rs",
+        "math.zig",
+        "text.go",
+        "nio.lock",
+    ] {
+        fs::remove_file(dir.path().join(name)).unwrap();
+    }
+    let service = launch(&capsule, &["--offline", "--workers", "1"]);
+    let client = Client::new();
+    for _ in 0..10 {
+        assert_eq!(
+            client
+                .get(format!("{}/", service.url))
+                .send()
+                .unwrap()
+                .text()
+                .map(|body| serde_json::from_str::<Value>(&body).unwrap())
+                .unwrap(),
+            json!([4, 6, 7, "owned-go-string"])
+        );
+    }
+    assert_eq!(
+        client
+            .get(format!("{}/invalid", service.url))
+            .send()
+            .unwrap()
+            .status(),
+        500
+    );
+}
+
+#[test]
+fn signing_cli_requires_the_expected_publisher() {
+    let dir = tempfile::tempdir().unwrap();
+    let key = dir.path().join("publisher.key");
+    let public = key.with_extension("pub");
+    let source = dir.path().join("main.ts");
+    let capsule = dir.path().join("main.njs");
+    let binary = env!("CARGO_BIN_EXE_nio-js");
+    assert!(
+        Command::new(binary)
+            .args([
+                "keys",
+                "gen",
+                "--email",
+                "test@example.com",
+                "--output",
+                key.to_str().unwrap()
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+    let secret = fs::read(&key).unwrap();
+    assert!(
+        !Command::new(binary)
+            .args([
+                "keys",
+                "gen",
+                "--email",
+                "test@example.com",
+                "--output",
+                key.to_str().unwrap()
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert_eq!(fs::read(&key).unwrap(), secret);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(&key).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+    fs::write(&source, "export const value = 42;").unwrap();
+    assert!(
+        Command::new(binary)
+            .args([
+                "build",
+                source.to_str().unwrap(),
+                "-o",
+                capsule.to_str().unwrap(),
+                "--sign-key",
+                key.to_str().unwrap()
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new(binary)
+            .args([
+                "verify",
+                capsule.to_str().unwrap(),
+                "--public-key",
+                public.to_str().unwrap()
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new(binary)
+            .args([
+                "exec",
+                capsule.to_str().unwrap(),
+                "--public-key",
+                public.to_str().unwrap()
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+    fs::write(&public, [0; 32]).unwrap();
+    assert!(
+        !Command::new(binary)
+            .args([
+                "verify",
+                capsule.to_str().unwrap(),
+                "--public-key",
+                public.to_str().unwrap()
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        !Command::new(binary)
+            .args([
+                "exec",
+                capsule.to_str().unwrap(),
+                "--public-key",
+                public.to_str().unwrap()
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+}
+
+#[test]
+#[ignore = "requires Go and a C compiler on PATH"]
+fn native_cloud_worker_example() {
+    let dir = tempfile::tempdir().unwrap();
+    for (name, contents) in [
+        (
+            "server.ts",
+            include_str!("../examples/hybrid-cloud-worker/server.ts"),
+        ),
+        (
+            "network.go",
+            include_str!("../examples/hybrid-cloud-worker/network.go"),
+        ),
+        (
+            "legacy_parser.c",
+            include_str!("../examples/hybrid-cloud-worker/legacy_parser.c"),
+        ),
+    ] {
+        fs::write(dir.path().join(name), contents).unwrap();
+    }
+    let capsule = dir.path().join("app.njs");
+    assert!(
+        Command::new(env!("CARGO_BIN_EXE_nio-js"))
+            .args([
+                "build",
+                dir.path().join("server.ts").to_str().unwrap(),
+                "-o",
+                capsule.to_str().unwrap()
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+    let service = launch(&capsule, &["--workers", "1"]);
+    let body = Client::new()
+        .get(format!("{}/api/iot/cluster-metrics", service.url))
+        .send()
+        .unwrap()
+        .text()
+        .unwrap();
+    let data: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(data["infrastructure"]["active_nodes"], 5);
+    assert_eq!(data["hardware_telemetry"]["normalized_value"], 14.2604);
+}
+
+#[cfg(feature = "python")]
+#[test]
+#[ignore = "requires Zig and Python on PATH"]
+fn native_fraud_pipeline_example() {
+    let dir = tempfile::tempdir().unwrap();
+    for (name, contents) in [
+        (
+            "server.ts",
+            include_str!("../examples/fraud-detection-pipeline/server.ts"),
+        ),
+        (
+            "crypto.zig",
+            include_str!("../examples/fraud-detection-pipeline/crypto.zig"),
+        ),
+        (
+            "ml_model.py",
+            include_str!("../examples/fraud-detection-pipeline/ml_model.py"),
+        ),
+    ] {
+        fs::write(dir.path().join(name), contents).unwrap();
+    }
+    let capsule = dir.path().join("app.njs");
+    assert!(
+        Command::new(env!("CARGO_BIN_EXE_nio-js"))
+            .args([
+                "build",
+                dir.path().join("server.ts").to_str().unwrap(),
+                "-o",
+                capsule.to_str().unwrap()
+            ])
+            .status()
+            .unwrap()
+            .success()
+    );
+    let service = launch(&capsule, &["--workers", "1"]);
+    let client = Client::new();
+    let url = format!("{}/api/fraud/analyze", service.url);
+    for body in [
+        "null",
+        "{",
+        r#"{"amount":-1,"user_id_hash":0,"account_age_days":0}"#,
+        r#"{"amount":"100","user_id_hash":1,"account_age_days":3}"#,
+    ] {
+        assert_eq!(client.post(&url).body(body).send().unwrap().status(), 400);
+    }
+    for body in [
+        r#"{"amount":15000.5,"user_id_hash":892341,"account_age_days":14}"#,
+        r#"{"amount":0,"user_id_hash":0,"account_age_days":0}"#,
+    ] {
+        let response = client.post(&url).body(body).send().unwrap();
+        assert_eq!(response.status(), 200);
+        let value: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
+        assert!(value["signals"]["history_flags"].as_u64().unwrap() < 10);
+        assert!(value["risk_score"].as_f64().unwrap().is_finite());
+    }
 }

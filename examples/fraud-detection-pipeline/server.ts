@@ -13,10 +13,13 @@ function scan_history(iterations: number): number {
 }
 
 post('/api/fraud/analyze', async ({ json }) => {
-  const tx = await json();
-  
-  if (!tx.amount || !tx.user_id_hash || !tx.account_age_days) {
-    return reply({ error: 'Missing fields' }, { status: 400 });
+  let tx;
+  try { tx = await json(); } catch { return reply({ error: 'Invalid JSON' }, { status: 400 }); }
+  if (!tx || typeof tx !== 'object' || Array.isArray(tx)
+      || typeof tx.amount !== 'number' || !Number.isFinite(tx.amount) || tx.amount < 0 || tx.amount > Number.MAX_SAFE_INTEGER
+      || !Number.isSafeInteger(tx.user_id_hash) || tx.user_id_hash < 0
+      || typeof tx.account_age_days !== 'number' || !Number.isFinite(tx.account_age_days) || tx.account_age_days < 0) {
+    return reply({ error: 'Expected nonnegative amount, integer user_id_hash, and account_age_days' }, { status: 400 });
   }
 
   // 1. Zig FFI for high-speed crypto operations

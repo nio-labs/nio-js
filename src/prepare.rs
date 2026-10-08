@@ -20,7 +20,8 @@ use std::{
 use url::Url;
 
 pub const FORMAT: u32 = 2;
-pub const MAGIC: &[u8; 4] = b"NIO\x01";
+pub const LOCK_FORMAT: u32 = 1;
+pub const MAGIC: &[u8; 4] = b"NJSB";
 pub const MAX_MODULE: usize = 16 * 1024 * 1024;
 pub const MAX_CAPSULE: usize = 64 * 1024 * 1024;
 pub fn hash(bytes: &[u8]) -> String {
@@ -47,6 +48,7 @@ pub struct Capsule {
     pub network: Vec<String>,
     pub assets: BTreeMap<String, Asset>,
     pub signature: Option<Vec<u8>>,
+    pub publisher: Option<Vec<u8>>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -364,106 +366,15 @@ fn compile(name: &str, source: &str) -> Result<(String, Vec<String>, String)> {
         .ok()
         .map(|u| u.path().to_owned())
         .unwrap_or_else(|| name.into());
-    if path.ends_with(".rs") {
-        use std::io::Write;
-        let out_dir = std::env::temp_dir();
-        let so_path = out_dir.join(format!(
-            "plugin_{}.so",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        let mut child = std::process::Command::new("rustc")
-            .arg("--crate-type=cdylib")
-            .arg("-O")
-            .arg("-C")
-            .arg("opt-level=3")
-            .arg("-")
-            .arg("-o")
-            .arg(&so_path)
-            .stdin(std::process::Stdio::piped())
-            .spawn()
-            .expect("Failed to spawn rustc");
-
-        child
-            .stdin
-            .as_mut()
-            .unwrap()
-            .write_all(source.as_bytes())
-            .unwrap();
-        child.wait().unwrap();
-
-        let bytes = std::fs::read(&so_path).unwrap();
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
-        let b64 = STANDARD.encode(&bytes);
-
-        let mut js_wrapper = String::from("");
-        js_wrapper.push_str(&format!(
-            "const __plugin = globalThis.__loadRust('{}');\n",
-            b64
-        ));
-
-        for line in source.lines() {
-            if line.contains("pub extern \"C\" fn")
-                || line.contains("pub no_mangle extern \"C\" fn")
-                || line.contains("#[no_mangle] pub extern \"C\" fn")
-            {
-                let parts: Vec<&str> = line.split("fn").nth(1).unwrap().split('(').collect();
-                let fn_name = parts[0].trim();
-                js_wrapper.push_str(&format!(
-                    "export const {} = __plugin.get('{}');
-",
-                    fn_name, fn_name
-                ));
-            }
-        }
-        return compile_inner(name, &js_wrapper, SourceType::mjs());
-    }
-    if path.ends_with(".zig") {
-        let out_dir = std::env::temp_dir();
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let src_path = out_dir.join(format!("plugin_{timestamp}.zig"));
-        let so_path = out_dir.join(format!("plugin_{timestamp}.so"));
-
-        std::fs::write(&src_path, source).expect("Failed to write zig file");
-
-        let mut child = std::process::Command::new("zig")
-            .arg("build-lib")
-            .arg("-dynamic")
-            .arg("-O")
-            .arg("ReleaseFast")
-            .arg(format!("-femit-bin={}", so_path.display()))
-            .arg(&src_path)
-            .spawn()
-            .expect("Failed to spawn zig compiler. Is 'zig' installed?");
-
-        child.wait().unwrap();
-
-        let bytes = std::fs::read(&so_path).expect("Failed to read compiled zig library");
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
-        let b64 = STANDARD.encode(&bytes);
-
-        let mut js_wrapper = String::from("");
-        js_wrapper.push_str(&format!(
-            "const __plugin = globalThis.__loadRust('{}');\n",
-            b64
-        ));
-
-        for line in source.lines() {
-            if line.contains("export fn") {
-                let parts: Vec<&str> = line.split("fn").nth(1).unwrap().split('(').collect();
-                let fn_name = parts[0].trim();
-                js_wrapper.push_str(&format!(
-                    "export const {} = __plugin.get('{}');\n",
-                    fn_name, fn_name
-                ));
-            }
-        }
-        return compile_inner(name, &js_wrapper, SourceType::mjs());
+    if let Some(language) = Path::new(&path).extension().and_then(|s| s.to_str())
+        && matches!(language, "rs" | "zig" | "c" | "go")
+    {
+        ensure!(
+            !name.starts_with("https://"),
+            "native imports must be local trusted sources"
+        );
+        let wrapper = crate::ffi::compile(source, language)?;
+        return compile_inner(name, &wrapper, SourceType::mjs());
     }
     if path.ends_with(".py") {
         let mut js_wrapper = String::from("import { python } from 'nio.js';\n");
@@ -575,6 +486,56 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
     }
     result
 }
+struct SourceGraph {
+    sources: BTreeMap<String, String>,
+    modules: BTreeMap<String, Object>,
+}
+struct SourceGraphHandle(std::sync::Arc<SourceGraph>);
+impl rquickjs::loader::Resolver for SourceGraphHandle {
+    fn resolve<'js>(
+        &mut self,
+        _ctx: &rquickjs::Ctx<'js>,
+        base: &str,
+        name: &str,
+        attributes: Option<rquickjs::loader::ImportAttributes<'js>>,
+    ) -> rquickjs::Result<String> {
+        if attributes.is_some() {
+            return Err(rquickjs::Error::new_resolving(base, name));
+        }
+        if name == "nio.js" {
+            return Ok(name.into());
+        }
+        self.0
+            .modules
+            .get(base)
+            .and_then(|m| m.imports.get(name))
+            .cloned()
+            .ok_or_else(|| rquickjs::Error::new_resolving(base, name))
+    }
+}
+impl rquickjs::loader::Loader for SourceGraphHandle {
+    fn load<'js>(
+        &mut self,
+        ctx: &rquickjs::Ctx<'js>,
+        name: &str,
+        attributes: Option<rquickjs::loader::ImportAttributes<'js>>,
+    ) -> rquickjs::Result<rquickjs::Module<'js>> {
+        if attributes.is_some() {
+            return Err(rquickjs::Error::new_loading(name));
+        }
+        let source = if name == "nio.js" {
+            include_str!("../runtime/nio.js")
+        } else {
+            self.0
+                .sources
+                .get(name)
+                .ok_or_else(|| rquickjs::Error::new_loading(name))?
+                .as_str()
+        };
+        rquickjs::Module::declare(ctx.clone(), name, source)
+    }
+}
+
 pub fn prepare(entry: &Path, options: &Options) -> Result<Capsule> {
     ensure!(
         !(options.frozen && options.update),
@@ -609,14 +570,14 @@ pub fn prepare(entry: &Path, options: &Options) -> Result<Capsule> {
         serde_json::from_slice(&fs::read(&lock_path)?)?
     } else {
         Lock {
-            format: FORMAT,
+            format: LOCK_FORMAT,
             transformer: "oxc-0.152".into(),
             remote: BTreeMap::new(),
         }
     };
     ensure!(!options.frozen || existing, "--frozen requires nio.lock");
     ensure!(
-        lock.format == FORMAT && lock.transformer == "oxc-0.152",
+        lock.format == LOCK_FORMAT && lock.transformer == "oxc-0.152",
         "unsupported lock format or transformer"
     );
     for (requested, pinned) in &lock.remote {
@@ -633,6 +594,7 @@ pub fn prepare(entry: &Path, options: &Options) -> Result<Capsule> {
     let original = serde_json::to_vec(&lock)?;
     let mut queue = VecDeque::from([entry_id.clone()]);
     let mut modules = BTreeMap::new();
+    let mut sources = BTreeMap::new();
     let mut aliases = BTreeMap::new();
     let mut total = 0;
     while let Some(requested) = queue.pop_front() {
@@ -756,13 +718,8 @@ pub fn prepare(entry: &Path, options: &Options) -> Result<Capsule> {
             imports.insert(spec, dep);
         }
 
-        let rt = rquickjs::Runtime::new()?;
-        let ctx = rquickjs::Context::full(&rt)?;
-        let bytecode = ctx.with(|ctx| -> anyhow::Result<Vec<u8>> {
-            let m = rquickjs::Module::declare(ctx, id.as_str(), code)?;
-            m.write(rquickjs::module::WriteOptions::default())
-                .map_err(|e| anyhow::anyhow!("qjs write failed: {}", e))
-        })?;
+        sources.insert(id.clone(), code);
+        let bytecode = Vec::new();
 
         modules.insert(
             id,
@@ -783,6 +740,29 @@ pub fn prepare(entry: &Path, options: &Options) -> Result<Capsule> {
             }
         }
     }
+    // Compile only after the complete graph and redirect aliases are known.
+    let graph = std::sync::Arc::new(SourceGraph {
+        sources,
+        modules: modules.clone(),
+    });
+    let rt = rquickjs::Runtime::new()?;
+    rt.set_memory_limit(MAX_CAPSULE * 4);
+    rt.set_loader(
+        SourceGraphHandle(graph.clone()),
+        SourceGraphHandle(graph.clone()),
+    );
+    let ctx = rquickjs::Context::full(&rt)?;
+    for (name, object) in &mut modules {
+        object.bytecode = ctx.with(|ctx| -> Result<Vec<u8>> {
+            use rquickjs::CatchResultExt;
+            let module =
+                rquickjs::Module::declare(ctx.clone(), name.as_str(), graph.sources[name].as_str())
+                    .catch(&ctx)
+                    .map_err(|e| anyhow::anyhow!("bytecode compilation {name}: {e}"))?;
+            Ok(module.write(rquickjs::module::WriteOptions::default())?)
+        })?;
+        object.integrity = hash(&object.bytecode);
+    }
     if options.frozen {
         ensure!(
             serde_json::to_vec(&lock)? == original,
@@ -793,7 +773,6 @@ pub fn prepare(entry: &Path, options: &Options) -> Result<Capsule> {
         atomic_write(&lock_path, &serde_json::to_vec_pretty(&lock)?)?;
     }
     let mut assets = BTreeMap::new();
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
     for definition in &options.assets {
         let (name, path) = definition.split_once('=').context("assets use NAME=PATH")?;
         ensure!(
@@ -833,19 +812,20 @@ pub fn prepare(entry: &Path, options: &Options) -> Result<Capsule> {
     let capsule = Capsule {
         magic: *MAGIC,
         format: FORMAT,
-        runtime: "nio-js/0.1".into(),
+        runtime: runtime_id(),
         entry: entry_id,
         modules,
         network: options.network.clone(),
         assets,
         signature: None,
+        publisher: None,
     };
     validate(&capsule)?;
     Ok(capsule)
 }
 pub fn validate(c: &Capsule) -> Result<()> {
     ensure!(
-        c.format == FORMAT && c.runtime == "nio-js/0.1",
+        c.magic == *MAGIC && c.format == FORMAT && c.runtime == runtime_id(),
         "incompatible capsule format/runtime"
     );
     ensure!(
@@ -900,7 +880,96 @@ pub fn validate(c: &Capsule) -> Result<()> {
             "asset integrity mismatch"
         );
     }
+    verify_signature(c, None)?;
     Ok(())
+}
+pub fn runtime_id() -> String {
+    format!(
+        "nio-js/{}/qjs-ng-0.14/{}-{}",
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    )
+}
+pub fn capsule_bytes(c: &Capsule) -> Result<Vec<u8>> {
+    use bincode::Options;
+    Ok(bincode::DefaultOptions::new()
+        .with_fixint_encoding()
+        .with_limit(MAX_CAPSULE as u64)
+        .serialize(c)?)
+}
+pub fn decode_capsule(bytes: &[u8]) -> Result<Capsule> {
+    use bincode::Options;
+    ensure!(
+        bytes.starts_with(MAGIC),
+        "invalid capsule magic; rebuild legacy JSON capsules"
+    );
+    let c = bincode::DefaultOptions::new()
+        .with_fixint_encoding()
+        .with_limit(MAX_CAPSULE as u64)
+        .reject_trailing_bytes()
+        .deserialize(bytes)?;
+    validate(&c)?;
+    Ok(c)
+}
+fn signing_payload(c: &Capsule) -> Result<Vec<u8>> {
+    let mut unsigned = c.clone();
+    unsigned.signature = None;
+    capsule_bytes(&unsigned)
+}
+pub fn sign(c: &mut Capsule, secret: &[u8]) -> Result<()> {
+    use ed25519_dalek::{Signer, SigningKey};
+    let bytes: &[u8; 32] = secret
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("signing key must be 32 bytes"))?;
+    let key = SigningKey::from_bytes(bytes);
+    c.publisher = Some(key.verifying_key().to_bytes().to_vec());
+    c.signature = Some(key.sign(&signing_payload(c)?).to_bytes().to_vec());
+    Ok(())
+}
+pub fn verify_signature(c: &Capsule, trusted: Option<&[u8]>) -> Result<()> {
+    match (&c.signature, &c.publisher) {
+        (Some(signature), Some(public)) => {
+            use ed25519_dalek::{Signature, VerifyingKey};
+            if let Some(trusted) = trusted {
+                ensure!(
+                    public == trusted,
+                    "publisher does not match trusted public key"
+                );
+            }
+            let bytes: &[u8; 32] = public
+                .as_slice()
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("invalid publisher key"))?;
+            let key = VerifyingKey::from_bytes(bytes)?;
+            let signature = Signature::from_slice(signature)?;
+            key.verify_strict(&signing_payload(c)?, &signature)?;
+        }
+        (None, None) => ensure!(
+            trusted.is_none(),
+            "trusted verification requires a signed capsule"
+        ),
+        _ => bail!("incomplete capsule signature"),
+    }
+    Ok(())
+}
+pub fn key_path(identity: &str) -> Result<PathBuf> {
+    ensure!(
+        !identity.is_empty()
+            && identity.len() <= 128
+            && identity
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"@._-".contains(&b))
+            && identity != "."
+            && identity != "..",
+        "invalid key identity"
+    );
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .context("home directory unavailable")?;
+    Ok(PathBuf::from(home)
+        .join(".nio/keys")
+        .join(format!("{identity}.key")))
 }
 pub fn read_capsule(path: &Path) -> Result<Capsule> {
     ensure!(
@@ -908,7 +977,7 @@ pub fn read_capsule(path: &Path) -> Result<Capsule> {
         "capsule too large"
     );
     let bytes = fs::read(path)?;
-    let c: Capsule = bincode::deserialize(&bytes)?;
+    let c: Capsule = decode_capsule(&bytes)?;
     ensure!(&c.magic == MAGIC, "invalid capsule magic");
     validate(&c)?;
     Ok(c)
@@ -916,6 +985,34 @@ pub fn read_capsule(path: &Path) -> Result<Capsule> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn binary_signatures_and_trusted_publishers() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        fs::write(dir.path().join("main.ts"), "export const value = 42;")?;
+        let mut c = prepare(&dir.path().join("main.ts"), &Options::default())?;
+        let secret = [7; 32];
+        sign(&mut c, &secret)?;
+        let public = c.publisher.clone().unwrap();
+        verify_signature(&c, Some(&public))?;
+        assert!(verify_signature(&c, Some(&[8; 32])).is_err());
+        let bytes = capsule_bytes(&c)?;
+        assert!(bytes.starts_with(MAGIC));
+        decode_capsule(&bytes)?;
+        let mut trailing = bytes.clone();
+        trailing.push(0);
+        assert!(decode_capsule(&trailing).is_err());
+        assert!(decode_capsule(&bytes[..bytes.len() / 2]).is_err());
+        c.network.push("example.com".into());
+        assert!(validate(&c).is_err());
+        Ok(())
+    }
+    #[test]
+    fn key_identities_cannot_escape_the_key_directory() {
+        for identity in ["", "../key", "a/b", "a\\b", ".", ".."] {
+            assert!(key_path(identity).is_err());
+        }
+        assert!(key_path("admin@example.com").is_ok());
+    }
     #[test]
     fn ts_graph_and_tamper() -> Result<()> {
         let dir = tempfile::tempdir()?;
@@ -927,7 +1024,7 @@ mod tests {
         let mut c = prepare(&dir.path().join("main.ts"), &Options::default())?;
         assert_eq!(c.modules.len(), 2);
         let bytecode = &c.modules[&c.entry].bytecode;
-        assert!(bytecode.len() > 0);
+        assert!(!bytecode.is_empty());
         c.modules.get_mut(&c.entry).unwrap().bytecode.push(0x00);
         assert!(validate(&c).is_err());
         Ok(())

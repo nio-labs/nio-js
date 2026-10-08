@@ -68,7 +68,7 @@
           <div class="nav-section-title">Packaging & Ecosystem</div>
           <a href="#hybrid-engine" class="nav-link">12. The Hybrid Engine (Zig, Go, C)</a>
           <a href="#dependencies" class="nav-link">13. Zero-Node Dependencies & Lockfiles</a>
-          <a href="#capsules" class="nav-link">14. Single-File Capsules (.njs)</a>
+          <a href="capsules.html" class="nav-link">14. Single-File Capsules (.njs)</a>
           <a href="#agent-mcp" class="nav-link">15. Agent Diagnostics & Stdio MCP</a>
           <a href="#real-world-examples" class="nav-link">16. Real-World Production Examples</a>
           <a href="#roadmap" class="nav-link">17. Ecosystem Roadmap to v1.0.0</a>
@@ -103,6 +103,7 @@
             <p class="hero-desc">
               Write simple TypeScript/JavaScript handlers. Import dependencies directly by URL. Offload compute to native Rust, dynamically bind Zig and Raw C via FFI, integrate Go cloud APIs, and run in-process Python AI. Package your verified application into a single immutable <code>.njs</code> capsule.
             </p>
+            <div class="capsule-actions"><a class="capsule-button" href="capsules.html">Discover Single-File Capsules →</a></div>
           </div>
 
           <h2>1. Mental Model & Architecture</h2>
@@ -117,7 +118,7 @@
             <li><strong>Compact Runtime</strong>: Embedded JavaScript execution and HTTP serving in a Rust host.</li>
             <li><strong>Hybrid Compute Offloading</strong>: JavaScript handles routing and JSON orchestration. Heavy computation escapes seamlessly to <strong>native Rust machine code</strong> (<code>/** @native */</code>), dynamically compiled <strong>Zig &amp; Raw C FFI</strong>, <strong>Go cloud APIs</strong>, or in-process <strong>Python AI algorithms</strong>.</li>
             <li><strong>Zero <code>node_modules</code></strong>: Modules are imported by HTTPS URL (esm.sh / UNPKG) with cryptographic SHA-256 lockfile pinning.</li>
-            <li><strong>Tamper-Proof Capsules</strong>: Ship a production app in one portable <code>.njs</code> file containing verified bytecode/source, asset tables, and permission envelopes.</li>
+            <li><strong>Single-File Capsules</strong>: Ship prepared application bytecode, dependency edges, and assets in one <code>.njs</code> artifact, with optional publisher signing. <a href="capsules.html">Read the complete capsule guide</a>.</li>
           </ul>
 
           <div class="architecture-diagram">
@@ -561,8 +562,8 @@ const k8sStatus = JSON.parse(FetchClusterStatus());</code></pre>
             </div>
 
             <div class="hybrid-card">
-              <h3 style="margin-top: 0;">💾 Raw C (Instant Legacy Parsing via TinyCC)</h3>
-              <p>Embedded TinyCC (tcc) compiles raw C code in-memory at runtime. No gigabyte toolchains, just instant execution of legacy code.</p>
+              <h3 style="margin-top: 0;">💾 C (Shared Library Imports)</h3>
+              <p>A system C compiler builds local C sources into shared libraries during preparation. Capsules embed the resulting library, so deployment does not require the compiler.</p>
               <pre><code class="language-typescript">import { parse_legacy_sensor } from './legacy_parser.c';
 const voltage = parse_legacy_sensor(420.5, 1.05);</code></pre>
             </div>
@@ -613,26 +614,13 @@ nio-js build app.ts --frozen -o app.njs
 nio-js build app.ts --offline --frozen -o app.njs</code></pre>
         </section>
 
-        <!-- Section 13: Capsules -->
-        <section id="capsules" class="doc-section">
+        <section id="capsules" class="doc-section capsule-summary">
           <h2>14. Single-File Capsules (<code>.njs</code>)</h2>
-          <p>
-            With the introduction of <strong>Capsule v2.0 (NJSB)</strong>, a capsule is a high-performance, cryptographically signed binary artifact. It bundles your complete dependency graph as <strong>pre-compiled QuickJS bytecode</strong>, along with raw binary assets, for zero-parsing <code>&lt; 1ms</code> cold starts.
-          </p>
-          <pre><code class="language-bash"># 1. Generate an Ed25519 publisher identity
-nio-js keys gen --email admin@example.com
-
-# 2. Build and sign capsule with embedded assets & AOT bytecode
-nio-js build app.ts --asset logo.svg=assets/logo.svg --sign admin@example.com -o dist/app.njs
-
-# 3. Inspect binary graph and metadata
-nio-js inspect dist/app.njs
-
-# 4. Cryptographically verify signature and hashes
-nio-js verify dist/app.njs
-
-# 5. Run standalone in production
+          <p class="hero-desc"><strong>Build once. Deploy one file.</strong> Package your service's precompiled modules, prepared dependency graph, and selected assets into one application artifact. Sign it with your release key and run it on a matching target, or embed it into a standalone executable.</p>
+          <pre><code class="language-bash">nio-js build app.ts -o dist/app.njs
 nio-js run dist/app.njs --port 8080</code></pre>
+          <p>A capsule needs a matching NioJS runtime version, OS, and CPU architecture. Publisher signing is optional; trusted public-key verification establishes who signed your release.</p>
+          <a class="capsule-button" href="capsules.html">Explore the complete capsule guide →</a>
         </section>
 
         <!-- Section 14: Agent MCP -->
@@ -665,7 +653,7 @@ nio-js run dist/app.njs --port 8080</code></pre>
             <li><strong><a href="https://github.com/nio-labs/nio-js/tree/main/examples/api-gateway" target="_blank" rel="noreferrer">REST API Gateway (<code>examples/api-gateway</code>)</a></strong>: Dynamic routing, query filtering, JSON validations, and native loop checksum acceleration.</li>
             <li><strong><a href="https://github.com/nio-labs/nio-js/tree/main/examples/ai-agent-service" target="_blank" rel="noreferrer">AI Agent Worker (<code>examples/ai-agent-service</code>)</a></strong>: Intent classification, RAG context scoring, and structured task planning powered by in-process Python.</li>
             <li><strong><a href="https://github.com/nio-labs/nio-js/tree/main/examples/fraud-detection-pipeline" target="_blank" rel="noreferrer">Fraud Detection Pipeline (<code>examples/fraud-detection-pipeline</code>)</a></strong>: Multi-language FFI showcasing TypeScript, Zig (crypto FFI), Python (ML inference), and Rust (native map-reduce).</li>
-            <li><strong><a href="https://github.com/nio-labs/nio-js/tree/main/examples/hybrid-cloud-worker" target="_blank" rel="noreferrer">Hybrid Cloud Worker (<code>examples/hybrid-cloud-worker</code>)</a></strong>: Showcasing TypeScript, Go (K8s/gRPC via cgo), and Raw C (instant in-memory parsing via TinyCC).</li>
+            <li><strong><a href="https://github.com/nio-labs/nio-js/tree/main/examples/hybrid-cloud-worker" target="_blank" rel="noreferrer">Hybrid Cloud Worker (<code>examples/hybrid-cloud-worker</code>)</a></strong>: Showcasing TypeScript, Go (K8s/gRPC via cgo), and C (shared library imports).</li>
           </ul>
         </section>
 
@@ -741,7 +729,7 @@ nio-js run dist/app.njs --port 8080</code></pre>
           </div>
           <div class="faq-item">
             <h3>Q: How does the Hybrid Engine share memory between languages?</h3>
-            <p>Standard HTTP payloads are routed via QuickJS. When calling Zig or Raw C FFI, data is passed via ultra-fast C-ABI memory pointers. Python bridging utilizes PyO3 memory sharing directly with the Rust host.</p>
+            <p>HTTP payloads are routed via QuickJS. Native imports use a restricted C ABI with zero to four double arguments and a double result. Go also supports owned C string results. Python arguments and results use JSON through PyO3.</p>
           </div>
           <div class="faq-item">
             <h3>Q: Is NioJS meant to replace Next.js or Nuxt?</h3>
@@ -749,7 +737,7 @@ nio-js run dist/app.njs --port 8080</code></pre>
           </div>
           <div class="faq-item">
             <h3>Q: What exactly is a <code>.njs</code> capsule?</h3>
-            <p>A capsule is a single-file deployment artifact. <code>nio-js build</code> compiles your TypeScript/JavaScript into Ahead-of-Time (AOT) QuickJS bytecode and bundles it alongside downloaded ESM dependencies, FFI bindings, and static assets into one immutable binary payload. This binary executes with &lt;1ms cold starts without needing <code>npm install</code> on the target server and is signed cryptographically for security.</p>
+            <p>A capsule is a single-file deployment artifact. <code>nio-js build</code> compiles your TypeScript/JavaScript into Ahead-of-Time (AOT) QuickJS bytecode and bundles it alongside downloaded ESM dependencies, FFI bindings, and static assets into one immutable binary payload. This binary runs without <code>npm install</code> on the target server. Publisher signing is optional; trusted public-key verification establishes publisher identity.</p>
           </div>
           <div class="faq-item">
             <h3>Q: How does <code>/** @native */</code> differ from Zig FFI?</h3>

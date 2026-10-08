@@ -7,7 +7,7 @@ import { get } from 'nio.js'
 get('/', 'Hello World')
 ```
 
-The engine is embedded through `rquickjs` 0.14 (QuickJS-NG) coupled with a multi-worker Rust host, native loop offloading, dynamic Zig & Raw C FFI, Go cloud-native bridging, and optional in-process Python AI execution. Node and npm are not needed to build or execute this project.
+The engine is embedded through `rquickjs` 0.14 (QuickJS-NG) coupled with a multi-worker Rust host, native loop offloading, toolchain-compiled Zig & C FFI, Go cloud-native bridging, and optional in-process Python AI execution. Node and npm are not needed to build or execute this project.
 
 📖 **[Read the Complete Guide to NioJS](GUIDE.md)** *(or browse online at [nio-labs.github.io/nio-js](https://nio-labs.github.io/nio-js/))* for detailed architecture, API reference, native acceleration, and deployment patterns.
 
@@ -114,13 +114,26 @@ Pin the runtime version and dependency URLs, commit `nio.lock`, and use `--froze
 nio-js keys gen --email admin@domain.com
 nio-js build examples/api-gateway/server.ts --sign admin@domain.com -o api-gateway.njs
 nio-js inspect api-gateway.njs
-nio-js verify api-gateway.njs
-nio-js run api-gateway.njs --port 3000
+nio-js verify api-gateway.njs --public-key "$HOME/.nio/keys/admin@domain.com.pub"
+nio-js run api-gateway.njs --public-key "$HOME/.nio/keys/admin@domain.com.pub" --port 3000
 ```
 
-With Capsule v2.0 (NJSB), capsules are high-performance binary archives containing pre-compiled QuickJS bytecode, dependency edges, per-object SHA-256 digests, source maps, raw binary assets, and Ed25519 signatures. They contain AOT compiled engine bytecode, enabling zero-parsing <1ms cold starts.
+With Capsule v2.0 (NJSB), capsules are high-performance binary archives containing pre-compiled QuickJS bytecode, dependency edges, per-object SHA-256 digests, source maps, raw binary assets, and optional Ed25519 signatures. They contain AOT compiled engine bytecode, avoiding JavaScript source parsing for application modules at deployment. Cold-start time depends on the application and machine.
 
-`verify` checks structure, graph completeness, compatibility, object digests, and validates the Ed25519 publisher signature. Source maps include original source content; do not place secrets in source or packaged assets.
+`verify` checks structure, recorded dependency edges, compatibility, object digests, and any attached Ed25519 signature. Use `--public-key <file>` to require a signed capsule from a trusted publisher; a self-contained signature alone does not establish trust. `run` and `exec` also accept `--public-key` to check the same artifact immediately before execution. Source maps include original source content; do not place secrets in source or packaged assets.
+
+Capsules must match the runtime version, operating system, and CPU architecture that built them. Rebuild older JSON capsules for this binary format. Only run capsules from trusted sources: QuickJS bytecode and native libraries are executable code, and native imports have process privileges.
+
+For CI-managed keys, `keys gen --email admin@example.com --output publisher.key` writes a private key and `publisher.pub`; sign with `build --sign-key publisher.key`. Existing key files are never overwritten.
+
+Build an executable containing the runtime and capsule:
+
+```bash
+nio-js build server.ts -o dist/app.njs --standalone dist/my-app
+./dist/my-app --port 3000 --workers 2
+```
+
+The executable serves the embedded application without source files, a dependency cache, or an installed `nio-js`. It retains the build machine's platform and system library requirements. `init` uses the supported Rust/Tokio host; generated `host/nio.toml` makes subsequent builds also produce `my-app` (`my-app.exe` on Windows). Alternative smol and Zig/libuv hosts are not implemented.
 
 ## Dependencies from esm.sh and UNPKG
 
@@ -404,17 +417,15 @@ Exposes JSON-RPC 2.0 tools:
 
 Multi-worker servers automatically detect physical CPU topologies when sizing the worker pool.
 
-## The Hybrid Engine (Zig, Go, C & Python)
+## The Hybrid Engine (Rust, Zig, C, Go & Python)
 
-NioJS lets you seamlessly blend languages in a single high-throughput event loop, without orchestrating external microservices.
+Local `.rs`, `.zig`, `.c`, and `.go` imports compile into shared libraries during source preparation. Build machines need the corresponding compiler (`rustc`, `zig`, `cc` or `CC`, and `go` with cgo support). Built capsules embed those libraries; deployment does not need those compilers.
 
-- **⚡ Zig (C-ABI FFI)**: Dynamically compile and bind high-speed cryptography or math directly to QuickJS (`import { verify } from './crypto.zig'`).
-- **☁️ Go (cgo)**: Utilize Go's `cgo` to build shared libraries, granting your JS backend access to Go's K8s/gRPC ecosystem (`import { get_status } from './network.go'`).
-- **💾 Raw C (TinyCC)**: Embedded TinyCC compiles raw C code in-memory at runtime. No toolchains, just instant execution (`import { parse } from './legacy.c'`).
-- **🧠 Python (PyO3)**: Run machine learning models natively alongside your JS router via PyO3, sharing memory space without IPC overhead (`import { predict } from './model.py'`).
-- **🦀 Rust (native)**: Use the `/** @native */` directive to compile heavy JS math loops into machine code seamlessly.
+Native exports support zero to four numeric arguments and a numeric result (`f64`, `double`, or `C.double`). Go may also export a zero-argument `*C.char` result with an explicit `FreeCString` export to release it. Unsupported signatures fail preparation. Native libraries are trusted code and are not covered by JavaScript network, memory, or timeout limits.
 
-📖 **[Browse Real-World Hybrid Examples](https://github.com/nio-labs/nio-js/tree/main/examples)** to see these languages working together in production pipelines.
+Python imports require a runtime built with `--features python` and its Python shared library. `/** @native */` continues to accelerate supported JavaScript numeric functions with fallback to JavaScript.
+
+See [native import contracts](NATIVE_FFI.md) for declarations, toolchains, ownership, and deployment limits. The [cloud worker](examples/hybrid-cloud-worker) demonstrates Go/C; the [fraud pipeline](examples/fraud-detection-pipeline) combines Zig, Python, and native JavaScript acceleration.
 
 ## Validation
 

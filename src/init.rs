@@ -110,18 +110,12 @@ fn init_monorepo(
         }
     };
 
-    let host_options = &["Rust + smol (Default)", "Zig + libuv", "Rust + Tokio"];
-    let selected_host = match host_opt {
-        Some(h) => h,
-        None => {
-            let host_selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt("Select your Native Host Architecture")
-                .default(0)
-                .items(&host_options[..])
-                .interact()?;
-            host_options[host_selection].to_string()
-        }
-    };
+    if let Some(host) = host_opt.as_deref() {
+        anyhow::ensure!(
+            matches!(host, "rust" | "rust-tokio" | "Rust + Tokio"),
+            "supported host: rust-tokio; alternative event loops are not implemented"
+        );
+    }
 
     println!("Initializing monorepo project '{}'...", name);
     fs::create_dir_all(&name)?;
@@ -161,40 +155,8 @@ get("/", () => reply("Hello from NioJS Backend!"));
         )?;
     }
 
-    // Scaffold the Host
-    fs::create_dir_all(format!("{}/host", name))?;
-    if selected_host == "Zig + libuv" {
-        fs::write(
-            format!("{}/host/build.zig", name),
-            "// Zig build script to compile libuv and QuickJS\nconst std = @import(\"std\");\npub fn build(b: *std.Build) void {}\n",
-        )?;
-        fs::write(
-            format!("{}/host/main.zig", name),
-            "// NioJS-Zig Ultra-Light Bare Metal Host\nconst std = @import(\"std\");\n\npub fn main() !void {\n    std.debug.print(\"Booting Zig + libuv engine...\\n\", .{});\n}\n",
-        )?;
-    } else if selected_host == "Rust + smol (Default)" {
-        fs::write(
-            format!("{}/host/Cargo.toml", name),
-            "[package]\nname = \"nio-custom-host\"\nversion = \"1.0.0\"\nedition = \"2021\"\n\n[dependencies]\nsmol = \"2.0\"\nrquickjs = \"0.6\"\n",
-        )?;
-        fs::create_dir_all(format!("{}/host/src", name))?;
-        fs::write(
-            format!("{}/host/src/main.rs", name),
-            "// NioJS Diet-Rust Host\nfn main() {\n    println!(\"Booting Rust + smol engine...\");\n    smol::block_on(async {\n        // HTTP listener\n    });\n}\n",
-        )?;
-    } else {
-        fs::write(
-            format!("{}/host/Cargo.toml", name),
-            "[package]\nname = \"nio-custom-host\"\nversion = \"1.0.0\"\nedition = \"2021\"\n\n[dependencies]\ntokio = { version = \"1.0\", features = [\"full\"] }\nhyper = \"1.0\"\nrquickjs = \"0.6\"\n",
-        )?;
-        fs::create_dir_all(format!("{}/host/src", name))?;
-        fs::write(
-            format!("{}/host/src/main.rs", name),
-            "// NioJS Standard Rust Host\n#[tokio::main]\nasync fn main() {\n    println!(\"Booting Rust + Tokio engine...\");\n}\n",
-        )?;
-    }
+    scaffold_host(&name)?;
 
-    // Generate root nio.toml early so it isn't skipped if the user cancels Vite
     let build_cmd = if kind == "app" {
         "npm run build && npx cap copy"
     } else {
@@ -449,18 +411,12 @@ fn init_server(
         }
     };
 
-    let host_options = &["Rust + smol (Default)", "Zig + libuv", "Rust + Tokio"];
-    let selected_host = match host_opt {
-        Some(h) => h,
-        None => {
-            let host_selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt("Select your Native Host Architecture")
-                .default(0)
-                .items(&host_options[..])
-                .interact()?;
-            host_options[host_selection].to_string()
-        }
-    };
+    if let Some(host) = host_opt.as_deref() {
+        anyhow::ensure!(
+            matches!(host, "rust" | "rust-tokio" | "Rust + Tokio"),
+            "supported host: rust-tokio; alternative event loops are not implemented"
+        );
+    }
 
     println!("Initializing server project '{}'...", name);
     fs::create_dir_all(&name)?;
@@ -496,38 +452,7 @@ get("/", () => reply("Hello from NioJS Backend!"));
         )?;
     }
 
-    // Scaffold the Host
-    fs::create_dir_all(format!("{}/host", name))?;
-    if selected_host == "Zig + libuv" {
-        fs::write(
-            format!("{}/host/build.zig", name),
-            "// Zig build script to compile libuv and QuickJS\nconst std = @import(\"std\");\npub fn build(b: *std.Build) void {}\n",
-        )?;
-        fs::write(
-            format!("{}/host/main.zig", name),
-            "// NioJS-Zig Ultra-Light Bare Metal Host\nconst std = @import(\"std\");\n\npub fn main() !void {\n    std.debug.print(\"Booting Zig + libuv engine...\\n\", .{});\n}\n",
-        )?;
-    } else if selected_host == "Rust + smol (Default)" {
-        fs::write(
-            format!("{}/host/Cargo.toml", name),
-            "[package]\nname = \"nio-custom-host\"\nversion = \"1.0.0\"\nedition = \"2021\"\n\n[dependencies]\nsmol = \"2.0\"\nrquickjs = \"0.6\"\n",
-        )?;
-        fs::create_dir_all(format!("{}/host/src", name))?;
-        fs::write(
-            format!("{}/host/src/main.rs", name),
-            "// NioJS Diet-Rust Host\nfn main() {\n    println!(\"Booting Rust + smol engine...\");\n    smol::block_on(async {\n        // HTTP listener\n    });\n}\n",
-        )?;
-    } else {
-        fs::write(
-            format!("{}/host/Cargo.toml", name),
-            "[package]\nname = \"nio-custom-host\"\nversion = \"1.0.0\"\nedition = \"2021\"\n\n[dependencies]\ntokio = { version = \"1.0\", features = [\"full\"] }\nhyper = \"1.0\"\nrquickjs = \"0.6\"\n",
-        )?;
-        fs::create_dir_all(format!("{}/host/src", name))?;
-        fs::write(
-            format!("{}/host/src/main.rs", name),
-            "// NioJS Standard Rust Host\n#[tokio::main]\nasync fn main() {\n    println!(\"Booting Rust + Tokio engine...\");\n}\n",
-        )?;
-    }
+    scaffold_host(&name)?;
 
     let nio_toml = r#"# NioJS Configuration File
 [tasks]
@@ -550,5 +475,14 @@ CMD ["nio-js", "task", "start"]
     println!("Next steps:");
     println!("  cd {}", name);
     println!("  nio-js task dev\n");
+    Ok(())
+}
+
+fn scaffold_host(name: &str) -> Result<()> {
+    fs::create_dir_all(format!("{name}/host"))?;
+    fs::write(
+        format!("{name}/host/nio.toml"),
+        "# Build embeds the capsule into the installed Rust/Tokio runtime.\n# Run ./my-app --port 3000 without source files or nio-js installed.\n",
+    )?;
     Ok(())
 }

@@ -3,7 +3,7 @@ import { get, reply } from 'nio.js';
 // 1. Go Cloud-Native Bridge (via cgo shared library)
 import { FetchClusterStatus } from './network.go';
 
-// 2. Raw C (Dynamically compiled in-memory via TinyCC)
+// 2. C (Compiled during preparation)
 import { parse_legacy_sensor } from './legacy_parser.c';
 
 get('/api/iot/cluster-metrics', () => {

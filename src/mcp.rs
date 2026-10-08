@@ -177,8 +177,7 @@ fn handle_tool_call(tool_name: &str, args: &Value) -> (String, bool) {
             let output_path = PathBuf::from(out_str);
             match prepare::prepare(&input_path, &prepare::Options::default()) {
                 Ok(capsule) => {
-                    match serde_json::to_vec_pretty(&capsule)
-                        .map_err(anyhow::Error::from)
+                    match prepare::capsule_bytes(&capsule)
                         .and_then(|bytes| prepare::atomic_write(&output_path, &bytes))
                     {
                         Ok(()) => {
@@ -272,6 +271,25 @@ fn eval_snippet(code: &str, timeout_ms: u64) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mcp_build_writes_a_readable_binary_capsule() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let source = directory.path().join("app.ts");
+        let output = directory.path().join("app.njs");
+        std::fs::write(
+            &source,
+            "import { get } from 'nio.js'; get('/', () => 'ok');",
+        )?;
+        let (_, error) = handle_tool_call(
+            "nio_build",
+            &serde_json::json!({"file":source,"output":output}),
+        );
+        assert!(!error);
+        assert!(std::fs::read(&output)?.starts_with(prepare::MAGIC));
+        prepare::read_capsule(&output)?;
+        Ok(())
+    }
 
     #[test]
     fn test_eval_snippet() -> Result<()> {

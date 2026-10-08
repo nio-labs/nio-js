@@ -7,7 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Mobile menu toggle
   if (menuToggle && sidebar) {
     menuToggle.addEventListener('click', () => {
-      sidebar.classList.toggle('open');
+      const open = sidebar.classList.toggle('open');
+      menuToggle.setAttribute('aria-expanded', String(open));
     });
 
     // Close on link click on mobile
@@ -15,10 +16,19 @@ document.addEventListener('DOMContentLoaded', () => {
       link.addEventListener('click', () => {
         if (window.innerWidth <= 900) {
           sidebar.classList.remove('open');
+          menuToggle.setAttribute('aria-expanded', 'false');
         }
       });
     });
   }
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && sidebar?.classList.contains('open')) {
+      sidebar.classList.remove('open');
+      menuToggle?.setAttribute('aria-expanded', 'false');
+      menuToggle?.focus();
+    }
+  });
 
   // Active link scroll spy
   const observerOptions = {

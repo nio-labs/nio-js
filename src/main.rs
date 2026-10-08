@@ -1,4 +1,5 @@
 mod engine;
+mod ffi;
 mod init;
 mod mcp;
 mod native;
@@ -6,6 +7,7 @@ mod network;
 mod prepare;
 pub mod python;
 mod server;
+mod standalone;
 mod task;
 
 use anyhow::{Context, Result, ensure};
@@ -46,6 +48,8 @@ enum Command {
     },
     Exec {
         file: PathBuf,
+        #[arg(long)]
+        public_key: Option<PathBuf>,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
         #[command(flatten)]
@@ -61,6 +65,8 @@ enum Command {
     },
     Run {
         file: PathBuf,
+        #[arg(long)]
+        public_key: Option<PathBuf>,
         #[arg(long, default_value = "3000")]
         port: u16,
         #[arg(long, default_value = "127.0.0.1")]
@@ -88,6 +94,12 @@ enum Command {
         preparation: Preparation,
         #[arg(long, value_delimiter = ',')]
         require_net: Vec<String>,
+        #[arg(long)]
+        sign: Option<String>,
+        #[arg(long, conflicts_with = "sign")]
+        sign_key: Option<PathBuf>,
+        #[arg(long)]
+        standalone: Option<PathBuf>,
         #[arg(long, default_value = "text")]
         format: String,
     },
@@ -104,6 +116,8 @@ enum Command {
     },
     Verify {
         file: PathBuf,
+        #[arg(long)]
+        public_key: Option<PathBuf>,
     },
     Keys {
         #[command(subcommand)]
@@ -116,6 +130,8 @@ enum KeysCommand {
     Gen {
         #[arg(long)]
         email: String,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
 }
 #[derive(clap::Args)]
@@ -172,7 +188,19 @@ fn main() {
     }
 }
 fn main_result() -> Result<()> {
-    match Cli::parse().command {
+    let embedded = standalone::embedded()?;
+    let cli = if embedded.is_some() {
+        let mut args = vec![
+            std::env::args_os().next().unwrap_or_default(),
+            "run".into(),
+            "__embedded__.njs".into(),
+        ];
+        args.extend(std::env::args_os().skip(1));
+        Cli::parse_from(args)
+    } else {
+        Cli::parse()
+    };
+    match cli.command {
         Command::Task { name } => {
             task::run_task(&name)?;
         }
@@ -191,68 +219,43 @@ fn main_result() -> Result<()> {
             output,
             preparation,
             require_net,
+            sign,
+            sign_key,
+            standalone,
             format,
         } => {
             ensure!(
                 output.extension().is_some_and(|s| s == "njs"),
                 "output must have .njs extension"
             );
-            let c = prepare::prepare(&file, &preparation.options(require_net)?)?;
-            prepare::atomic_write(&output, &serde_json::to_vec_pretty(&c)?)?;
+            let mut c = prepare::prepare(&file, &preparation.options(require_net)?)?;
+            if let Some(identity) = sign {
+                prepare::sign(&mut c, &std::fs::read(prepare::key_path(&identity)?)?)?;
+            }
+            if let Some(path) = sign_key {
+                prepare::sign(&mut c, &std::fs::read(path)?)?;
+            }
+            prepare::atomic_write(&output, &prepare::capsule_bytes(&c)?)?;
 
-            // Phase 3: The Standalone Compiler (Meta-Runtime Embedding)
-            if std::path::Path::new("host").exists() {
-                println!(
-                    "Detected 'host/' directory. Embedding capsule into standalone native host..."
+            let standalone = standalone.or_else(|| {
+                std::path::Path::new("host/nio.toml").exists().then(|| {
+                    PathBuf::from(if cfg!(windows) {
+                        "my-app.exe"
+                    } else {
+                        "my-app"
+                    })
+                })
+            });
+            if let Some(path) = standalone {
+                ensure!(
+                    path != output
+                        && (!path.exists()
+                            || std::fs::canonicalize(&path)? != std::fs::canonicalize(&output)?),
+                    "standalone output must differ from capsule output"
                 );
-                let capsule_name = output.file_name().unwrap();
-                let dest = std::path::Path::new("host").join(capsule_name);
-                std::fs::copy(&output, &dest)?;
-
-                if std::path::Path::new("host/Cargo.toml").exists() {
-                    println!("Compiling Rust host...");
-                    let status = std::process::Command::new("cargo")
-                        .args(["build", "--release"])
-                        .current_dir("host")
-                        .status()?;
-                    if status.success() {
-                        let bin_name = if cfg!(windows) {
-                            "nio-custom-host.exe"
-                        } else {
-                            "nio-custom-host"
-                        };
-                        let final_out = if cfg!(windows) {
-                            "my-app.exe"
-                        } else {
-                            "my-app"
-                        };
-                        std::fs::copy(format!("host/target/release/{}", bin_name), final_out)
-                            .unwrap_or(0);
-                        println!(
-                            "✨ Successfully compiled standalone Rust executable: ./{}",
-                            final_out
-                        );
-                    }
-                } else if std::path::Path::new("host/build.zig").exists() {
-                    println!("Compiling Zig host...");
-                    let status = std::process::Command::new("zig")
-                        .args(["build", "-Doptimize=ReleaseFast"])
-                        .current_dir("host")
-                        .status()?;
-                    if status.success() {
-                        let bin_name = if cfg!(windows) { "host.exe" } else { "host" };
-                        let final_out = if cfg!(windows) {
-                            "my-app.exe"
-                        } else {
-                            "my-app"
-                        };
-                        std::fs::copy(format!("host/zig-out/bin/{}", bin_name), final_out)
-                            .unwrap_or(0);
-                        println!(
-                            "✨ Successfully compiled standalone Zig executable: ./{}",
-                            final_out
-                        );
-                    }
+                standalone::build(&path, &c)?;
+                if format != "agent-json" {
+                    println!("Built standalone executable {}", path.display());
                 }
             }
 
@@ -328,32 +331,64 @@ fn main_result() -> Result<()> {
             println!(
                 "{}",
                 serde_json::to_string_pretty(
-                    &serde_json::json!({"format":c.format,"runtime":c.runtime,"entry":c.entry,"modules":c.modules.keys().collect::<Vec<_>>(),"required_network":c.network,"assets":c.assets.keys().collect::<Vec<_>>(),"digest":prepare::hash(&std::fs::read(file)?)})
+                    &serde_json::json!({"format":c.format,"runtime":c.runtime,"signed":c.signature.is_some(),"publisher_fingerprint":c.publisher.as_ref().map(|key| prepare::hash(key)),"entry":c.entry,"modules":c.modules.keys().collect::<Vec<_>>(),"required_network":c.network,"assets":c.assets.keys().collect::<Vec<_>>(),"digest":prepare::hash(&std::fs::read(file)?)})
                 )?
             );
         }
-        Command::Verify { file } => {
-            prepare::read_capsule(&file)?;
-            println!("Verified {}", file.display());
+        Command::Verify { file, public_key } => {
+            let c = prepare::read_capsule(&file)?;
+            if let Some(path) = public_key {
+                prepare::verify_signature(&c, Some(&std::fs::read(path)?))?;
+            }
+            println!(
+                "Verified {} ({})",
+                file.display(),
+                if c.signature.is_some() {
+                    "signed"
+                } else {
+                    "unsigned"
+                }
+            );
         }
         Command::Keys { cmd } => match cmd {
-            KeysCommand::Gen { email } => {
+            KeysCommand::Gen { email, output } => {
                 use ed25519_dalek::SigningKey;
                 use rand::RngCore;
                 let mut bytes = [0u8; 32];
                 rand::rngs::OsRng.fill_bytes(&mut bytes);
                 let signing_key = SigningKey::from_bytes(&bytes);
-                let home_dir = std::env::var("HOME")
-                    .map(PathBuf::from)
-                    .unwrap_or_else(|_| PathBuf::from("."));
-                let dir = home_dir.join(".nio").join("keys");
-                std::fs::create_dir_all(&dir)?;
-                std::fs::write(dir.join(format!("{}.key", email)), signing_key.to_bytes())?;
+                let path = output.unwrap_or(prepare::key_path(&email)?);
+                ensure!(
+                    path != path.with_extension("pub"),
+                    "private key output must differ from .pub output"
+                );
+                if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+                    std::fs::create_dir_all(parent)?;
+                }
+                ensure!(
+                    !path.with_extension("pub").exists(),
+                    "public key output already exists"
+                );
+                let mut options = std::fs::OpenOptions::new();
+                options.write(true).create_new(true);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::OpenOptionsExt;
+                    options.mode(0o600);
+                }
+                use std::io::Write;
+                options.open(&path)?.write_all(&signing_key.to_bytes())?;
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(path.with_extension("pub"))?
+                    .write_all(&signing_key.verifying_key().to_bytes())?;
                 println!("Generated key for {}", email);
             }
         },
         Command::Exec {
             file,
+            public_key,
             args: _args,
             preparation,
             allow_net,
@@ -369,11 +404,16 @@ fn main_result() -> Result<()> {
                 (10..=60000).contains(&timeout_ms),
                 "timeout must be between 10 and 60000 ms"
             );
-            let c = if file.extension().is_some_and(|s| s == "njs") {
+            let c = if file == std::path::Path::new("__embedded__.njs") && embedded.is_some() {
+                embedded.clone().unwrap()
+            } else if file.extension().is_some_and(|s| s == "njs") {
                 prepare::read_capsule(&file)?
             } else {
                 prepare::prepare(&file, &preparation.options(vec![])?)?
             };
+            if let Some(path) = public_key {
+                prepare::verify_signature(&c, Some(&std::fs::read(path)?))?;
+            }
             let limits = engine::Limits {
                 memory: memory_mb * 1024 * 1024,
                 timeout: Duration::from_millis(timeout_ms),
@@ -388,6 +428,7 @@ fn main_result() -> Result<()> {
         }
         Command::Run {
             file,
+            public_key,
             port,
             host,
             preparation,
@@ -411,11 +452,16 @@ fn main_result() -> Result<()> {
                 "body limit must be between 1 KiB and 16 MiB"
             );
             ensure!(workers <= 64, "workers must not exceed 64");
-            let c = if file.extension().is_some_and(|s| s == "njs") {
+            let c = if file == std::path::Path::new("__embedded__.njs") && embedded.is_some() {
+                embedded.clone().unwrap()
+            } else if file.extension().is_some_and(|s| s == "njs") {
                 prepare::read_capsule(&file)?
             } else {
                 prepare::prepare(&file, &preparation.options(vec![])?)?
             };
+            if let Some(path) = public_key {
+                prepare::verify_signature(&c, Some(&std::fs::read(path)?))?;
+            }
             let limits = engine::Limits {
                 memory: memory_mb * 1024 * 1024,
                 timeout: Duration::from_millis(timeout_ms),
