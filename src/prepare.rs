@@ -364,33 +364,100 @@ fn compile(name: &str, source: &str) -> Result<(String, Vec<String>, String)> {
     if path.ends_with(".rs") {
         use std::io::Write;
         let out_dir = std::env::temp_dir();
-        let so_path = out_dir.join(format!("plugin_{}.so", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let so_path = out_dir.join(format!(
+            "plugin_{}.so",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         let mut child = std::process::Command::new("rustc")
             .arg("--crate-type=cdylib")
             .arg("-O")
-            .arg("-C").arg("opt-level=3")
+            .arg("-C")
+            .arg("opt-level=3")
             .arg("-")
-            .arg("-o").arg(&so_path)
+            .arg("-o")
+            .arg(&so_path)
             .stdin(std::process::Stdio::piped())
             .spawn()
             .expect("Failed to spawn rustc");
-        
-        child.stdin.as_mut().unwrap().write_all(source.as_bytes()).unwrap();
+
+        child
+            .stdin
+            .as_mut()
+            .unwrap()
+            .write_all(source.as_bytes())
+            .unwrap();
         child.wait().unwrap();
-        
+
         let bytes = std::fs::read(&so_path).unwrap();
         use base64::{Engine as _, engine::general_purpose::STANDARD};
         let b64 = STANDARD.encode(&bytes);
-        
+
         let mut js_wrapper = String::from("");
-        js_wrapper.push_str(&format!("const __plugin = globalThis.__loadRust('{}');\n", b64));
-        
+        js_wrapper.push_str(&format!(
+            "const __plugin = globalThis.__loadRust('{}');\n",
+            b64
+        ));
+
         for line in source.lines() {
-            if line.contains("pub extern \"C\" fn") || line.contains("pub no_mangle extern \"C\" fn") || line.contains("#[no_mangle] pub extern \"C\" fn") {
+            if line.contains("pub extern \"C\" fn")
+                || line.contains("pub no_mangle extern \"C\" fn")
+                || line.contains("#[no_mangle] pub extern \"C\" fn")
+            {
                 let parts: Vec<&str> = line.split("fn").nth(1).unwrap().split('(').collect();
                 let fn_name = parts[0].trim();
-                js_wrapper.push_str(&format!("export const {} = __plugin.get('{}');
-", fn_name, fn_name));
+                js_wrapper.push_str(&format!(
+                    "export const {} = __plugin.get('{}');
+",
+                    fn_name, fn_name
+                ));
+            }
+        }
+        return compile_inner(name, &js_wrapper, SourceType::mjs());
+    }
+    if path.ends_with(".zig") {
+        let out_dir = std::env::temp_dir();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let src_path = out_dir.join(format!("plugin_{timestamp}.zig"));
+        let so_path = out_dir.join(format!("plugin_{timestamp}.so"));
+
+        std::fs::write(&src_path, source).expect("Failed to write zig file");
+
+        let mut child = std::process::Command::new("zig")
+            .arg("build-lib")
+            .arg("-dynamic")
+            .arg("-O")
+            .arg("ReleaseFast")
+            .arg(format!("-femit-bin={}", so_path.display()))
+            .arg(&src_path)
+            .spawn()
+            .expect("Failed to spawn zig compiler. Is 'zig' installed?");
+
+        child.wait().unwrap();
+
+        let bytes = std::fs::read(&so_path).expect("Failed to read compiled zig library");
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        let b64 = STANDARD.encode(&bytes);
+
+        let mut js_wrapper = String::from("");
+        js_wrapper.push_str(&format!(
+            "const __plugin = globalThis.__loadRust('{}');\n",
+            b64
+        ));
+
+        for line in source.lines() {
+            if line.contains("export fn") {
+                let parts: Vec<&str> = line.split("fn").nth(1).unwrap().split('(').collect();
+                let fn_name = parts[0].trim();
+                js_wrapper.push_str(&format!(
+                    "export const {} = __plugin.get('{}');\n",
+                    fn_name, fn_name
+                ));
             }
         }
         return compile_inner(name, &js_wrapper, SourceType::mjs());
@@ -798,7 +865,11 @@ pub fn validate(c: &Capsule) -> Result<()> {
                     .all(|b| b.is_ascii_hexdigit()),
             "invalid source digest"
         );
-        let compile_name = name.trim_end_matches(".ts").trim_end_matches(".rs").trim_end_matches(".py");
+        let compile_name = name
+            .trim_end_matches(".ts")
+            .trim_end_matches(".rs")
+            .trim_end_matches(".py")
+            .trim_end_matches(".zig");
         let compile_name = format!("{}.js", compile_name);
         let (_, specs, _) = compile(&compile_name, &object.code)?;
         ensure!(
