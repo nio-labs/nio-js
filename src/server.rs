@@ -248,7 +248,7 @@ async fn form(bytes: Bytes, content_type: &str, max: usize) -> Result<Option<Vec
 }
 async fn handle(State(app): State<App>, request: Request) -> Response {
     let id = app.ids.fetch_add(1, Ordering::Relaxed);
-    let Ok(_permit) = app.requests.clone().try_acquire_owned() else {
+    let Ok(_permit) = app.requests.try_acquire() else {
         return error(
             StatusCode::SERVICE_UNAVAILABLE,
             "Too many concurrent requests",
@@ -259,17 +259,18 @@ async fn handle(State(app): State<App>, request: Request) -> Response {
         return error(StatusCode::SERVICE_UNAVAILABLE, "Service is stopping", id);
     }
     let (parts, body) = request.into_parts();
-    let method = parts.method.as_str().to_owned();
+    let method = parts.method.as_str();
     let path = parts.uri.path();
-    let mut candidates = Vec::new();
-    let mut allowed = Vec::new();
-    if let Some(index) = app
+    let exact = app
         .exact
         .get(path)
-        .and_then(|methods| methods.get(method.as_str()))
-    {
-        candidates.push((*index, BTreeMap::new(), usize::MAX));
+        .and_then(|methods| methods.get(method))
+        .copied();
+    let (index, params) = if let Some(index) = exact {
+        (index, None)
     } else {
+        let mut candidates = Vec::new();
+        let mut allowed = Vec::new();
         for (index, route) in app.routes.iter().enumerate() {
             if let Some((params, score)) = match_path(&route.path, path) {
                 allowed.push(route.method.as_str());
@@ -278,28 +279,30 @@ async fn handle(State(app): State<App>, request: Request) -> Response {
                 }
             }
         }
-    }
-    let Some((index, params, _)) = candidates.into_iter().max_by_key(|(_, _, score)| *score) else {
-        let mut r = error(
-            if allowed.is_empty() {
-                StatusCode::NOT_FOUND
-            } else {
-                StatusCode::METHOD_NOT_ALLOWED
-            },
-            if allowed.is_empty() {
-                "Not Found"
-            } else {
-                "Method Not Allowed"
-            },
-            id,
-        );
-        if !allowed.is_empty() {
-            allowed.sort();
-            allowed.dedup();
-            r.headers_mut()
-                .insert("allow", HeaderValue::from_str(&allowed.join(", ")).unwrap());
-        }
-        return r;
+        let Some((index, params, _)) = candidates.into_iter().max_by_key(|(_, _, score)| *score)
+        else {
+            let mut r = error(
+                if allowed.is_empty() {
+                    StatusCode::NOT_FOUND
+                } else {
+                    StatusCode::METHOD_NOT_ALLOWED
+                },
+                if allowed.is_empty() {
+                    "Not Found"
+                } else {
+                    "Method Not Allowed"
+                },
+                id,
+            );
+            if !allowed.is_empty() {
+                allowed.sort();
+                allowed.dedup();
+                r.headers_mut()
+                    .insert("allow", HeaderValue::from_str(&allowed.join(", ")).unwrap());
+            }
+            return r;
+        };
+        (index, Some(params))
     };
     if let Some(reply) = &app.constants[index] {
         return reply.response(id);
@@ -308,6 +311,7 @@ async fn handle(State(app): State<App>, request: Request) -> Response {
     let input = if route_arity == 0 {
         String::new()
     } else {
+        let params = params.unwrap_or_default();
         let search = parts.uri.query().unwrap_or("");
         let authority = parts
             .headers
@@ -361,7 +365,7 @@ async fn handle(State(app): State<App>, request: Request) -> Response {
         };
         let id_str = id.to_string();
         match serde_json::to_string(&RequestPayload {
-            method: &method,
+            method,
             url: &url,
             headers: &headers,
             query: &query,
@@ -461,16 +465,6 @@ pub async fn serve(
         std::thread::Builder::new()
             .name(format!("nio-js-engine-{worker_id}"))
             .spawn(move || {
-                #[cfg(target_os = "linux")]
-                unsafe {
-                    let mut cpuset: libc::cpu_set_t = std::mem::zeroed();
-                    libc::CPU_SET(worker_id % (libc::CPU_SETSIZE as usize), &mut cpuset);
-                    let _ = libc::pthread_setaffinity_np(
-                        libc::pthread_self(),
-                        std::mem::size_of::<libc::cpu_set_t>(),
-                        &cpuset,
-                    );
-                }
                 let _done = done;
                 let mut engine = match Engine::new(worker_capsule.clone(), worker_limits.clone()) {
                     Ok(e) => e,

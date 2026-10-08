@@ -1,6 +1,10 @@
 //! Validated numeric AST lowered to machine code by the Rust Cranelift backend.
 use anyhow::{Result, bail, ensure};
-use cranelift_codegen::ir::{self, AbiParam, InstBuilder, MemFlags, condcodes::FloatCC, types};
+use cranelift_codegen::ir::{
+    self, AbiParam, InstBuilder, MemFlags,
+    condcodes::{FloatCC, IntCC},
+    types,
+};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Linkage, Module, default_libcall_names};
@@ -9,7 +13,10 @@ use oxc_ast::ast::*;
 use oxc_parser::Parser;
 use oxc_span::SourceType;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, time::Instant};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    time::Instant,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Expr {
@@ -455,14 +462,158 @@ extern "C" fn remainder(a: f64, b: f64) -> f64 {
 struct Emit<'a, 'b> {
     b: FunctionBuilder<'a>,
     vars: Vec<Variable>,
+    int_vars: Vec<Option<Variable>>,
     state: ir::Value,
     tick: ir::FuncRef,
+    tick_counter: Variable,
     _bits: ir::FuncRef,
     rem: ir::FuncRef,
     loops: Vec<(ir::Block, ir::Block)>,
     budget: &'b mut usize,
 }
+fn integer_locals(ops: &[Op], candidates: &mut [bool], seen: &mut [bool]) {
+    for op in ops {
+        match op {
+            Op::Set(index, expr) => {
+                if let (Some(seen), Some(candidate)) =
+                    (seen.get_mut(*index), candidates.get_mut(*index))
+                {
+                    *seen = true;
+                    *candidate &= Emit::integer_range(expr)
+                        .is_some_and(|(min, max)| min >= i32::MIN as i64 && max <= i32::MAX as i64);
+                }
+            }
+            Op::If(_, yes, no) => {
+                integer_locals(yes, candidates, seen);
+                integer_locals(no, candidates, seen);
+            }
+            Op::Loop(test, body, update) => {
+                integer_locals(body, candidates, seen);
+                if let Some(index) = bounded_increment(test, body, update) {
+                    if let Some(seen) = seen.get_mut(index) {
+                        *seen = true;
+                    }
+                } else {
+                    integer_locals(update, candidates, seen);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+fn writes_local(ops: &[Op], index: usize) -> bool {
+    ops.iter().any(|op| match op {
+        Op::Set(i, _) => *i == index,
+        Op::If(_, yes, no) => writes_local(yes, index) || writes_local(no, index),
+        Op::Loop(_, body, update) => writes_local(body, index) || writes_local(update, index),
+        _ => false,
+    })
+}
+fn bounded_increment(test: &Expr, body: &[Op], update: &[Op]) -> Option<usize> {
+    // A signed counter cannot overflow when the literal test bounds its +1 update
+    // and the loop body never assigns to it.
+    let Expr::Binary(operator, left, right) = test else {
+        return None;
+    };
+    let Expr::Local(index) = &**left else {
+        return None;
+    };
+    let Expr::Number(bound) = &**right else {
+        return None;
+    };
+    let max = if operator == "<" {
+        i32::MAX as f64
+    } else if operator == "<=" {
+        (i32::MAX - 1) as f64
+    } else {
+        return None;
+    };
+    if !bound.is_finite()
+        || bound.fract() != 0.0
+        || *bound > max
+        || *bound < i32::MIN as f64
+        || writes_local(body, *index)
+    {
+        return None;
+    }
+    let [Op::Set(updated, Expr::Binary(op, a, b))] = update else {
+        return None;
+    };
+    if *updated == *index
+        && op == "+"
+        && matches!(&**a, Expr::Local(i) if i == index)
+        && matches!(&**b, Expr::Number(step) if *step == 1.0)
+    {
+        Some(*index)
+    } else {
+        None
+    }
+}
 impl Emit<'_, '_> {
+    fn integer_range(e: &Expr) -> Option<(i64, i64)> {
+        const MAX_SAFE: i64 = 9_007_199_254_740_991;
+        match e {
+            Expr::Number(n)
+                if n.is_finite()
+                    && n.fract() == 0.0
+                    && n.abs() <= MAX_SAFE as f64
+                    && !(n.is_sign_negative() && *n == 0.0) =>
+            {
+                let value = *n as i64;
+                Some((value, value))
+            }
+            Expr::Binary(op, _, _) if op == ">>>" => Some((0, u32::MAX as i64)),
+            Expr::Binary(op, _, _)
+                if matches!(op.as_str(), "|" | "&" | "^" | "<<" | ">>" | "imul") =>
+            {
+                Some((i32::MIN as i64, i32::MAX as i64))
+            }
+            Expr::Binary(op, a, b) if matches!(op.as_str(), "+" | "-") => {
+                let (amin, amax) = Self::integer_range(a)?;
+                let (bmin, bmax) = Self::integer_range(b)?;
+                let range = if op == "+" {
+                    (amin.checked_add(bmin)?, amax.checked_add(bmax)?)
+                } else {
+                    (amin.checked_sub(bmax)?, amax.checked_sub(bmin)?)
+                };
+                (range.0 >= -MAX_SAFE && range.1 <= MAX_SAFE).then_some(range)
+            }
+            _ => None,
+        }
+    }
+    fn runtime_integer_range(&self, e: &Expr) -> Option<(i64, i64)> {
+        match e {
+            Expr::Local(index) if self.int_vars.get(*index).is_some_and(Option::is_some) => {
+                Some((i32::MIN as i64, i32::MAX as i64))
+            }
+            Expr::Binary(op, a, b) if matches!(op.as_str(), "+" | "-" | "*" | "%") => {
+                let (amin, amax) = self.runtime_integer_range(a)?;
+                let (bmin, bmax) = self.runtime_integer_range(b)?;
+                let range = if op == "+" {
+                    (amin.checked_add(bmin)?, amax.checked_add(bmax)?)
+                } else if op == "-" {
+                    (amin.checked_sub(bmax)?, amax.checked_sub(bmin)?)
+                } else if op == "*" {
+                    let mut vals = [
+                        amin.checked_mul(bmin)?,
+                        amin.checked_mul(bmax)?,
+                        amax.checked_mul(bmin)?,
+                        amax.checked_mul(bmax)?,
+                    ];
+                    vals.sort();
+                    (vals[0], vals[3])
+                } else {
+                    // %
+                    // Worst case for a % b is (-b_max, b_max)
+                    let bound = bmin.abs().max(bmax.abs());
+                    (-bound, bound)
+                };
+                const MAX_SAFE: i64 = 9_007_199_254_740_991;
+                (range.0 >= -MAX_SAFE && range.1 <= MAX_SAFE).then_some(range)
+            }
+            _ => Self::integer_range(e),
+        }
+    }
     fn spend(&mut self) -> Result<()> {
         ensure!(*self.budget > 0, "native program too complex");
         *self.budget -= 1;
@@ -481,6 +632,10 @@ impl Emit<'_, '_> {
         let gt = self.b.ins().fcmp(FloatCC::GreaterThan, value, zero);
         self.b.ins().bor(lt, gt)
     }
+    fn expr_i64(&mut self, e: &Expr, depth: usize) -> Result<ir::Value> {
+        let v = self.expr(e, depth)?;
+        Ok(self.b.ins().fcvt_to_sint_sat(types::I64, v))
+    }
     fn expr_i32(&mut self, e: &Expr, depth: usize) -> Result<ir::Value> {
         self.spend()?;
         ensure!(depth < 64, "native expression too deep");
@@ -489,7 +644,19 @@ impl Emit<'_, '_> {
                 let i = (*n as i64) as i32;
                 self.b.ins().iconst(types::I32, i as i64)
             }
+            Expr::Local(index) if self.int_vars.get(*index).is_some_and(Option::is_some) => {
+                self.b.use_var(self.int_vars[*index].unwrap())
+            }
             Expr::Binary(op, a, b) => match op.as_str() {
+                "+" | "-" if self.runtime_integer_range(e).is_some() => {
+                    let ai = self.expr_i32(a, depth + 1)?;
+                    let bi = self.expr_i32(b, depth + 1)?;
+                    if op == "+" {
+                        self.b.ins().iadd(ai, bi)
+                    } else {
+                        self.b.ins().isub(ai, bi)
+                    }
+                }
                 "|" => {
                     let ai = self.expr_i32(a, depth + 1)?;
                     let bi = self.expr_i32(b, depth + 1)?;
@@ -576,31 +743,45 @@ impl Emit<'_, '_> {
                 }
             }
             Expr::Binary(op, a, b) => match op.as_str() {
-                "+" => {
-                    let av = self.expr(a, depth + 1)?;
-                    let bv = self.expr(b, depth + 1)?;
-                    self.b.ins().fadd(av, bv)
-                }
-                "-" => {
-                    let av = self.expr(a, depth + 1)?;
-                    let bv = self.expr(b, depth + 1)?;
-                    self.b.ins().fsub(av, bv)
-                }
-                "*" => {
-                    let av = self.expr(a, depth + 1)?;
-                    let bv = self.expr(b, depth + 1)?;
-                    self.b.ins().fmul(av, bv)
+                "+" | "-" | "*" | "%" => {
+                    let signed = |range: Option<(i64, i64)>| {
+                        range.is_some_and(|(min, max)| min >= -9007199254740991 && max <= 9007199254740991)
+                    };
+                    if signed(self.runtime_integer_range(a)) && signed(self.runtime_integer_range(b)) {
+                        let av64 = self.expr_i64(a, depth + 1)?;
+                        let bv64 = self.expr_i64(b, depth + 1)?;
+                        let res64 = match op.as_str() {
+                            "+" => self.b.ins().iadd(av64, bv64),
+                            "-" => self.b.ins().isub(av64, bv64),
+                            "*" => self.b.ins().imul(av64, bv64),
+                            "%" => {
+                                // For JS modulo, which can be negative, srem is roughly correct if a and b are positive.
+                                // But JS % handles negative correctly for srem, except for negative 0.
+                                // Actually, srem is perfect for JS integers that aren't zero-result negative.
+                                self.b.ins().srem(av64, bv64)
+                            },
+                            _ => unreachable!(),
+                        };
+                        self.b.ins().fcvt_from_sint(types::F64, res64)
+                    } else {
+                        let av = self.expr(a, depth + 1)?;
+                        let bv = self.expr(b, depth + 1)?;
+                        match op.as_str() {
+                            "+" => self.b.ins().fadd(av, bv),
+                            "-" => self.b.ins().fsub(av, bv),
+                            "*" => self.b.ins().fmul(av, bv),
+                            "%" => {
+                                let call = self.b.ins().call(self.rem, &[av, bv]);
+                                self.b.inst_results(call)[0]
+                            },
+                            _ => unreachable!(),
+                        }
+                    }
                 }
                 "/" => {
                     let av = self.expr(a, depth + 1)?;
                     let bv = self.expr(b, depth + 1)?;
                     self.b.ins().fdiv(av, bv)
-                }
-                "%" => {
-                    let av = self.expr(a, depth + 1)?;
-                    let bv = self.expr(b, depth + 1)?;
-                    let call = self.b.ins().call(self.rem, &[av, bv]);
-                    self.b.inst_results(call)[0]
                 }
                 "|" | "&" | "^" | "<<" | ">>" | ">>>" | "imul" => {
                     let ai = self.expr_i32(a, depth + 1)?;
@@ -658,13 +839,59 @@ impl Emit<'_, '_> {
             },
         })
     }
+    fn condition(&mut self, e: &Expr, depth: usize) -> Result<ir::Value> {
+        ensure!(depth < 64, "native condition too deep");
+        if let Expr::Binary(op, a, b) = e
+            && matches!(
+                op.as_str(),
+                "<" | "<=" | ">" | ">=" | "==" | "===" | "!=" | "!=="
+            )
+        {
+            self.spend()?;
+            let signed = |range: Option<(i64, i64)>| {
+                range.is_some_and(|(min, max)| min >= i32::MIN as i64 && max <= i32::MAX as i64)
+            };
+            if signed(self.runtime_integer_range(a)) && signed(self.runtime_integer_range(b)) {
+                let av = self.expr_i32(a, depth + 1)?;
+                let bv = self.expr_i32(b, depth + 1)?;
+                let cc = match op.as_str() {
+                    "<" => IntCC::SignedLessThan,
+                    "<=" => IntCC::SignedLessThanOrEqual,
+                    ">" => IntCC::SignedGreaterThan,
+                    ">=" => IntCC::SignedGreaterThanOrEqual,
+                    "==" | "===" => IntCC::Equal,
+                    _ => IntCC::NotEqual,
+                };
+                return Ok(self.b.ins().icmp(cc, av, bv));
+            }
+            let av = self.expr(a, depth + 1)?;
+            let bv = self.expr(b, depth + 1)?;
+            let cc = match op.as_str() {
+                "<" => FloatCC::LessThan,
+                "<=" => FloatCC::LessThanOrEqual,
+                ">" => FloatCC::GreaterThan,
+                ">=" => FloatCC::GreaterThanOrEqual,
+                "==" | "===" => FloatCC::Equal,
+                _ => FloatCC::NotEqual,
+            };
+            return Ok(self.b.ins().fcmp(cc, av, bv));
+        }
+        let value = self.expr(e, depth)?;
+        Ok(self.truth(value))
+    }
     fn block(&mut self, ops: &[Op], depth: usize) -> Result<bool> {
         ensure!(depth < 64, "native control flow too deep");
         for op in ops {
             self.spend()?;
             match op {
                 Op::Set(i, e) => {
-                    let value = self.expr(e, 0)?;
+                    let value = if let Some(int_var) = self.int_vars.get(*i).copied().flatten() {
+                        let value = self.expr_i32(e, 0)?;
+                        self.b.def_var(int_var, value);
+                        self.b.ins().fcvt_from_sint(types::F64, value)
+                    } else {
+                        self.expr(e, 0)?
+                    };
                     let var = self.local(*i)?;
                     self.b.def_var(var, value);
                 }
@@ -684,8 +911,7 @@ impl Emit<'_, '_> {
                     return Ok(true);
                 }
                 Op::If(test, yes, no) => {
-                    let v = self.expr(test, 0)?;
-                    let t = self.truth(v);
+                    let t = self.condition(test, 0)?;
                     let yes_b = self.b.create_block();
                     let no_b = self.b.create_block();
                     let join = self.b.create_block();
@@ -714,6 +940,15 @@ impl Emit<'_, '_> {
                     let check = self.b.create_block();
                     self.b.ins().jump(header, &[]);
                     self.b.switch_to_block(header);
+                    let count = self.b.use_var(self.tick_counter);
+                    let count = self.b.ins().iadd_imm(count, 1);
+                    self.b.def_var(self.tick_counter, count);
+                    // Check time every 1024 loop entries; run() checks before the first entry.
+                    let due = self.b.ins().band_imm(count, 1023);
+                    let due = self.b.ins().icmp_imm(IntCC::Equal, due, 0);
+                    let poll = self.b.create_block();
+                    self.b.ins().brif(due, poll, &[], check, &[]);
+                    self.b.switch_to_block(poll);
                     let tick = self.b.ins().call(self.tick, &[self.state]);
                     let alive = self.b.inst_results(tick)[0];
                     self.b.ins().brif(alive, check, &[], timeout, &[]);
@@ -721,8 +956,7 @@ impl Emit<'_, '_> {
                     let nan = self.b.ins().f64const(f64::NAN);
                     self.b.ins().return_(&[nan]);
                     self.b.switch_to_block(check);
-                    let v = self.expr(test, 0)?;
-                    let t = self.truth(v);
+                    let t = self.condition(test, 0)?;
                     self.b.ins().brif(t, body_b, &[], exit, &[]);
                     self.b.switch_to_block(body_b);
                     self.loops.push((exit, next));
@@ -807,12 +1041,29 @@ impl Executable {
             b.def_var(var, value);
             vars.push(var);
         }
+        let mut candidates = vec![true; plan.locals];
+        let mut seen = vec![false; plan.locals];
+        integer_locals(&plan.ops, &mut candidates, &mut seen);
+        let mut int_vars = vec![None; plan.locals];
+        for index in plan.params.len()..plan.locals {
+            if candidates[index] && seen[index] {
+                let var = b.declare_var(types::I32);
+                let zero = b.ins().iconst(types::I32, 0);
+                b.def_var(var, zero);
+                int_vars[index] = Some(var);
+            }
+        }
+        let tick_counter = b.declare_var(types::I32);
+        let zero = b.ins().iconst(types::I32, 0);
+        b.def_var(tick_counter, zero);
         let mut budget = 4096;
         let mut emitter = Emit {
             b,
             vars,
+            int_vars,
             state,
             tick,
+            tick_counter,
             _bits: bits,
             rem,
             loops: vec![],
@@ -878,10 +1129,48 @@ pub struct JsonPlan {
     pub array_from: bool,
     pub builtins: Vec<String>,
 }
+impl JsonPlan {
+    pub fn raw_compatible(&self) -> bool {
+        fn check(value: &JsonExpr) -> bool {
+            match value {
+                JsonExpr::Object(fields) => {
+                    let mut names = std::collections::HashSet::new();
+                    fields.iter().all(|(key, value)| {
+                        !key.starts_with(|c: char| c.is_ascii_digit())
+                            && names.insert(key)
+                            && check(value)
+                    })
+                }
+                JsonExpr::Array(items) => items.iter().all(check),
+                JsonExpr::Range(_, _, value) => check(value),
+                _ => true,
+            }
+        }
+        matches!(
+            &self.value,
+            JsonExpr::Object(_) | JsonExpr::Array(_) | JsonExpr::Range(_, _, _)
+        ) && check(&self.value)
+    }
+}
 impl Lower {
-    fn json(&mut self, e: &Expression, array_from: &mut bool) -> Result<JsonExpr> {
+    fn json(
+        &mut self,
+        e: &Expression,
+        array_from: &mut bool,
+        constants: &BTreeMap<String, serde_json::Value>,
+        used: &mut BTreeSet<String>,
+    ) -> Result<JsonExpr> {
         Ok(match e {
-            Expression::ParenthesizedExpression(p) => self.json(&p.expression, array_from)?,
+            Expression::ParenthesizedExpression(p) => {
+                self.json(&p.expression, array_from, constants, used)?
+            }
+            Expression::Identifier(id)
+                if !self.names.contains_key(id.name.as_str())
+                    && constants.contains_key(id.name.as_str()) =>
+            {
+                used.insert(id.name.to_string());
+                JsonExpr::Literal(constants[id.name.as_str()].clone())
+            }
             Expression::StringLiteral(s) => {
                 ensure!(!s.lone_surrogates, "native JSON lone surrogate");
                 JsonExpr::Literal(serde_json::json!(s.value.as_str()))
@@ -904,7 +1193,7 @@ impl Lower {
                         _ => bail!("native property key"),
                     };
                     ensure!(key != "__proto__", "native prototype property");
-                    properties.push((key, self.json(&p.value, array_from)?));
+                    properties.push((key, self.json(&p.value, array_from, constants, used)?));
                 }
                 JsonExpr::Object(properties)
             }
@@ -916,6 +1205,8 @@ impl Lower {
                             item.as_expression()
                                 .ok_or_else(|| anyhow::anyhow!("native array spread/hole"))?,
                             array_from,
+                            constants,
+                            used,
                         )?,
                     );
                 }
@@ -1015,6 +1306,8 @@ impl Lower {
                         .as_expression()
                         .ok_or_else(|| anyhow::anyhow!("native mapper requires expression body"))?,
                     array_from,
+                    constants,
+                    used,
                 )?;
                 self.names.remove(index.name.as_str());
                 *array_from = true;
@@ -1027,7 +1320,10 @@ impl Lower {
         })
     }
 }
-pub fn json_plan(source: &str) -> Result<JsonPlan> {
+pub fn json_plan_with_constants(
+    source: &str,
+    constants: &BTreeMap<String, serde_json::Value>,
+) -> Result<(JsonPlan, Vec<String>)> {
     let allocator = Allocator::default();
     let parsed = Parser::new(&allocator, source, SourceType::mjs()).parse();
     ensure!(parsed.diagnostics.is_empty(), "native JSON syntax");
@@ -1071,41 +1367,50 @@ pub fn json_plan(source: &str) -> Result<JsonPlan> {
         bail!("native JSON return")
     };
     let mut array_from = false;
+    let mut used = BTreeSet::new();
     let value = lower.json(
         r.argument
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("native JSON return value"))?,
         &mut array_from,
+        constants,
+        &mut used,
     )?;
     ensure!(
         params.len() <= 16 && lower.next <= 256,
         "native JSON limits"
     );
-    Ok(JsonPlan {
-        params,
-        locals: lower.next,
-        value,
-        array_from,
-        builtins: {
-            let mut names: Vec<String> = lower.builtins.borrow().iter().cloned().collect();
-            names.sort();
-            names
+    Ok((
+        JsonPlan {
+            params,
+            locals: lower.next,
+            value,
+            array_from,
+            builtins: {
+                let mut names: Vec<String> = lower.builtins.borrow().iter().cloned().collect();
+                names.sort();
+                names
+            },
         },
-    })
+        used.into_iter().collect(),
+    ))
 }
 struct JsonRun {
     deadline: Instant,
     nodes: usize,
     bytes: usize,
     max: usize,
+    raw_compatible: bool,
 }
 impl JsonRun {
     fn step(&mut self, bytes: usize) -> Result<()> {
-        ensure!(
-            Instant::now() < self.deadline,
-            "native execution deadline exceeded"
-        );
         ensure!(self.nodes > 0, "native JSON node limit exceeded");
+        if self.nodes & 63 == 0 {
+            ensure!(
+                Instant::now() < self.deadline,
+                "native execution deadline exceeded"
+            );
+        }
         self.nodes -= 1;
         self.bytes = self
             .bytes
@@ -1170,38 +1475,59 @@ impl JsonRun {
             }
         })
     }
-    fn value(
+    fn write_value(
         &mut self,
         e: &JsonExpr,
         locals: &mut [f64],
+        output: &mut Vec<u8>,
         depth: usize,
-    ) -> Result<serde_json::Value> {
+    ) -> Result<()> {
         self.step(1)?;
         ensure!(depth < 64, "native JSON nesting limit");
-        Ok(match e {
+        match e {
             JsonExpr::Literal(v) => {
                 ensure!(
                     v.is_null() || v.is_boolean() || v.is_string(),
                     "invalid native JSON literal"
                 );
                 self.step(v.as_str().map(str::len).unwrap_or(0))?;
-                v.clone()
+                serde_json::to_writer(&mut *output, v)?;
             }
-            JsonExpr::Number(e) => serde_json::json!(self.number(e, locals, 0)?),
-            JsonExpr::Object(fields) => {
-                let mut object = serde_json::Map::new();
-                for (key, value) in fields {
-                    self.step(key.len())?;
-                    object.insert(key.clone(), self.value(value, locals, depth + 1)?);
+            JsonExpr::Number(e) => {
+                let number = self.number(e, locals, 0)?;
+                if number.is_finite()
+                    && number.fract() == 0.0
+                    && number.abs() <= 9_007_199_254_740_991.0
+                {
+                    serde_json::to_writer(&mut *output, &(number as i64))?;
+                } else {
+                    self.raw_compatible = false;
+                    serde_json::to_writer(&mut *output, &serde_json::json!(number))?;
                 }
-                serde_json::Value::Object(object)
             }
-            JsonExpr::Array(items) => serde_json::Value::Array(
-                items
-                    .iter()
-                    .map(|item| self.value(item, locals, depth + 1))
-                    .collect::<Result<_>>()?,
-            ),
+            JsonExpr::Object(fields) => {
+                output.push(b'{');
+                for (i, (key, value)) in fields.iter().enumerate() {
+                    if i > 0 {
+                        output.push(b',');
+                    }
+                    self.step(key.len())?;
+                    serde_json::to_writer(&mut *output, key)?;
+                    output.push(b':');
+                    self.write_value(value, locals, output, depth + 1)?;
+                }
+                output.push(b'}');
+            }
+            JsonExpr::Array(items) => {
+                output.push(b'[');
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        output.push(b',');
+                    }
+                    self.write_value(item, locals, output, depth + 1)?;
+                }
+                output.push(b']');
+            }
             JsonExpr::Template(parts, exprs) => {
                 ensure!(parts.len() == exprs.len() + 1, "invalid native template");
                 let mut s = String::new();
@@ -1223,7 +1549,7 @@ impl JsonRun {
                         s.push_str(&text);
                     }
                 }
-                serde_json::Value::String(s)
+                serde_json::to_writer(&mut *output, &s)?;
             }
             JsonExpr::Range(length, index, value) => {
                 let n = self.number(length, locals, 0)?;
@@ -1237,18 +1563,35 @@ impl JsonRun {
                     n.floor() as usize
                 };
                 ensure!(*index < locals.len(), "native JSON mapper local");
-                let mut out = Vec::new();
+                output.push(b'[');
                 for i in 0..len {
+                    if i > 0 {
+                        output.push(b',');
+                    }
                     locals[*index] = i as f64;
-                    out.push(self.value(value, locals, depth + 1)?);
+                    self.write_value(value, locals, output, depth + 1)?;
                 }
-                serde_json::Value::Array(out)
+                output.push(b']');
             }
-        })
+        }
+        ensure!(output.len() <= self.max, "native JSON body limit exceeded");
+        Ok(())
     }
 }
 impl JsonPlan {
     pub fn run(&self, args: &[f64], deadline: Instant, max: usize) -> Result<String> {
+        self.run_checked(args, deadline, max)
+            .map(|(result, _)| result)
+    }
+    pub fn run_raw(&self, args: &[f64], deadline: Instant, max: usize) -> Result<Option<String>> {
+        let (result, compatible) = self.run_checked(args, deadline, max)?;
+        Ok(compatible.then_some(result))
+    }
+    fn run_checked(&self, args: &[f64], deadline: Instant, max: usize) -> Result<(String, bool)> {
+        ensure!(
+            Instant::now() < deadline,
+            "native execution deadline exceeded"
+        );
         ensure!(
             self.params.len() <= 16
                 && self.locals <= 256
@@ -1263,10 +1606,11 @@ impl JsonPlan {
             nodes: max.min(1_000_000),
             bytes: 0,
             max,
+            raw_compatible: true,
         };
-        let value = run.value(&self.value, &mut locals, 0)?;
-        let result = serde_json::to_string(&value)?;
-        ensure!(result.len() <= max, "native JSON body limit exceeded");
-        Ok(result)
+        let mut output = Vec::with_capacity(max.min(1024));
+        run.write_value(&self.value, &mut locals, &mut output, 0)?;
+        let result = String::from_utf8(output)?;
+        Ok((result, run.raw_compatible))
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "nio-js"
-version = "0.2.7"
+version = "0.2.8"
 edition = "2024"
 rust-version = "1.96"
 description = "The hybrid, agent-native worker runtime: TypeScript APIs, native Rust acceleration, in-process Python AI, and portable capsules"
@@ -13,7 +13,6 @@ base64 = "0.22"
 futures-util = "0.3"
 multer = "3"
 percent-encoding = "2"
-libc = "0.2"
 clap = { version = "4", features = ["derive"] }
 oxc_allocator = "0.152"
 oxc_ast = "0.152"
@@ -39,6 +38,7 @@ cranelift-codegen = "0.125"
 cranelift-frontend = "0.125"
 cranelift-jit = "0.125"
 cranelift-module = "0.125"
+libloading = "0.9.0"
 
 [features]
 default = []

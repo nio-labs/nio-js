@@ -20,8 +20,8 @@ use std::{
 use url::Url;
 
 pub const FORMAT: u32 = 1;
-pub const MAX_MODULE: usize = 4 * 1024 * 1024;
-pub const MAX_CAPSULE: usize = 32 * 1024 * 1024;
+pub const MAX_MODULE: usize = 16 * 1024 * 1024;
+pub const MAX_CAPSULE: usize = 64 * 1024 * 1024;
 pub fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
@@ -118,6 +118,36 @@ impl<'a> Visit<'a> for Imports {
 }
 
 // Comments come from parser spans, so Unicode cannot split an arbitrary byte window.
+fn literal_constants(program: &Program) -> BTreeMap<String, serde_json::Value> {
+    let mut constants = BTreeMap::new();
+    for statement in &program.body {
+        let declaration = match statement {
+            Statement::VariableDeclaration(declaration) => Some(&**declaration),
+            Statement::ExportDeclaration(export) => match &export.declaration {
+                Declaration::VariableDeclaration(declaration) => Some(&**declaration),
+                _ => None,
+            },
+            _ => None,
+        };
+        let Some(declaration) = declaration else {
+            continue;
+        };
+        if declaration.kind != VariableDeclarationKind::Const {
+            continue;
+        }
+        for declarator in &declaration.declarations {
+            let BindingPattern::BindingIdentifier(id) = &declarator.id else {
+                continue;
+            };
+            if let Some(Expression::StringLiteral(value)) = &declarator.init
+                && !value.lone_surrogates
+            {
+                constants.insert(id.name.to_string(), serde_json::json!(value.value.as_str()));
+            }
+        }
+    }
+    constants
+}
 fn detect_native_functions(
     program: &Program,
     source: &str,
@@ -130,6 +160,7 @@ fn detect_native_functions(
     {
         return results;
     }
+    let constants = literal_constants(program);
     for stmt in &program.body {
         let (func, decl_start) = match stmt {
             Statement::ExportDeclaration(decl) => {
@@ -167,7 +198,7 @@ fn detect_native_functions(
         let Ok((javascript, _, _)) = compile_inner("native.ts", function_source, ty) else {
             continue;
         };
-        let (serialized, params, string, json, array_from, builtins) =
+        let (serialized, params, string, json, array_from, builtins, captures, raw_json) =
             if let Ok(plan) = crate::native::numeric(&javascript) {
                 (
                     serde_json::to_string(&plan).unwrap(),
@@ -176,8 +207,13 @@ fn detect_native_functions(
                     false,
                     false,
                     plan.builtins,
+                    Vec::new(),
+                    false,
                 )
-            } else if let Ok(plan) = crate::native::json_plan(&javascript) {
+            } else if let Ok((plan, captures)) =
+                crate::native::json_plan_with_constants(&javascript, &constants)
+            {
+                let raw_json = plan.raw_compatible();
                 (
                     serde_json::to_string(&plan).unwrap(),
                     plan.params,
@@ -185,6 +221,8 @@ fn detect_native_functions(
                     true,
                     plan.array_from,
                     plan.builtins,
+                    captures,
+                    raw_json,
                 )
             } else {
                 continue;
@@ -194,7 +232,7 @@ fn detect_native_functions(
             continue;
         }
         let name = format!("__nioNative{}", results.len());
-        let prefix = format!(
+        let mut prefix = format!(
             "var {name} = {}({});\n",
             if json {
                 "__nioCompileJson"
@@ -226,6 +264,12 @@ fn detect_native_functions(
                 guard.push_str(&format!(" && Math === __nioOriginalMath && Math.{builtin} === __nioOriginalMath{builtin}"));
             }
         }
+        for capture in captures {
+            guard.push_str(&format!(
+                " && {capture} === {}",
+                serde_json::to_string(&constants[&capture]).unwrap()
+            ));
+        }
         if json {
             for p in &params {
                 guard.push_str(&format!(" && {p} % 1 === 0 && {p} > -1e21 && {p} < 1e21"));
@@ -240,6 +284,15 @@ fn detect_native_functions(
             },
             if string { ".toString()" } else { "" }
         );
+        if json
+            && raw_json
+            && let Some(id) = &func.id
+        {
+            prefix.push_str(&format!(
+                "__nioAttachNativeJson({}, function({args}) {{ if ({guard}) return __nioInvokeJsonRaw({name}, [{args}]); }});\n",
+                id.name
+            ));
+        }
         let start = body.span.start as usize;
         let end = body.span.end as usize;
         let Some(original) = source.get(start + 1..end - 1) else {
@@ -308,6 +361,40 @@ fn compile(name: &str, source: &str) -> Result<(String, Vec<String>, String)> {
         .ok()
         .map(|u| u.path().to_owned())
         .unwrap_or_else(|| name.into());
+    if path.ends_with(".rs") {
+        use std::io::Write;
+        let out_dir = std::env::temp_dir();
+        let so_path = out_dir.join(format!("plugin_{}.so", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let mut child = std::process::Command::new("rustc")
+            .arg("--crate-type=cdylib")
+            .arg("-O")
+            .arg("-C").arg("opt-level=3")
+            .arg("-")
+            .arg("-o").arg(&so_path)
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn rustc");
+        
+        child.stdin.as_mut().unwrap().write_all(source.as_bytes()).unwrap();
+        child.wait().unwrap();
+        
+        let bytes = std::fs::read(&so_path).unwrap();
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        let b64 = STANDARD.encode(&bytes);
+        
+        let mut js_wrapper = String::from("");
+        js_wrapper.push_str(&format!("const __plugin = globalThis.__loadRust('{}');\n", b64));
+        
+        for line in source.lines() {
+            if line.contains("pub extern \"C\" fn") || line.contains("pub no_mangle extern \"C\" fn") || line.contains("#[no_mangle] pub extern \"C\" fn") {
+                let parts: Vec<&str> = line.split("fn").nth(1).unwrap().split('(').collect();
+                let fn_name = parts[0].trim();
+                js_wrapper.push_str(&format!("export const {} = __plugin.get('{}');
+", fn_name, fn_name));
+            }
+        }
+        return compile_inner(name, &js_wrapper, SourceType::mjs());
+    }
     if path.ends_with(".py") {
         let mut js_wrapper = String::from("import { python } from 'nio.js';\n");
         let escaped_code = serde_json::to_string(source)?;
@@ -711,7 +798,9 @@ pub fn validate(c: &Capsule) -> Result<()> {
                     .all(|b| b.is_ascii_hexdigit()),
             "invalid source digest"
         );
-        let (_, specs, _) = compile(name.trim_end_matches(".ts"), &object.code)?;
+        let compile_name = name.trim_end_matches(".ts").trim_end_matches(".rs").trim_end_matches(".py");
+        let compile_name = format!("{}.js", compile_name);
+        let (_, specs, _) = compile(&compile_name, &object.code)?;
         ensure!(
             specs.iter().all(|s| object.imports.contains_key(s)),
             "capsule has an unrecorded import: {name}"

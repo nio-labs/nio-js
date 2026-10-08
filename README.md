@@ -163,6 +163,37 @@ nio-js build server.ts --import-map imports.json -o server.njs
 
 Local imports are confined to the entrypoint's directory after canonicalization, including symlink resolution. HTTPS relative imports resolve against the final redirected URL. Literal dynamic imports are prepared; computed dynamic imports, import attributes, Node built-ins, native addons, and automatic CommonJS execution are rejected.
 
+
+## Benchmarks
+
+### Compute & Throughput Microbenchmarks
+
+| Workload | NioJS ops/s | NioJS (@native) | NioJS (Rust) | Node ops/s | Bun ops/s | Deno ops/s | Verdict |
+|---|---:|---:|---:|---:|---:|---:|:---:|
+| HTTP GET throughput | 8,307,028 | 8,335,973 | 39,594,551 | 17,869,907 | 11,718,658 | 14,149,075 | 🏆 NioJS (Rust) |
+| JSON.parse small payload | 508,849 | 525,243 | 4,629,634,300 | 1,252,496 | 1,400,407 | 1,603,489 | 🏆 NioJS (Rust) |
+| JSON.parse large payload | 1,096 | 1,227 | 180,179,186 | 4,700 | 5,776 | 5,522 | 🏆 NioJS (Rust) |
+| JSON.stringify small object | 240,563 | 216,539 | 4,132,255,600 | 1,434,033 | 1,755,692 | 2,933,480 | 🏆 NioJS (Rust) |
+| JSON.stringify medium object | 22,560 | 22,745 | 1,724,138,645 | 235,707 | 315,734 | 298,536 | 🏆 NioJS (Rust) |
+| SHA 256 hashing small buffer | 200,938 | 202,245 | 1,398,593,026 | 10,314,595 | 1,214,595 | 5,693,464 | 🏆 NioJS (Rust) |
+| SHA 256 hashing large buffer | 3,145 | 3,205 | 1,091,584 | 68,254 | 303,297 | 75,835 | 🏆 NioJS (Rust) |
+| Buffer copy 64 KB | 418,274 | 423,970 | 466,999 | 50,307 | 95,171 | 44,750 | 🏆 NioJS (Rust) |
+| Array map plus reduce | 991 | 1,001 | 222,433 | 9,376 | 21,280 | 8,516 | 🏆 NioJS (Rust) |
+| String concatenation | 8,501 | 8,019 | 299,208 | 136,057 | 254,140 | 154,459 | 🏆 NioJS (Rust) |
+| Integer loop plus arithmetic | 1,401 | 9,428 | 3,314,400 | 32,809 | 30,647 | 32,137 | 🏆 NioJS (Rust) |
+| Integer loop with randomized input | 1,737 | 1,728 | 3,329,979 | 32,722 | 31,086 | 31,980 | 🏆 NioJS (Rust) |
+
+### Bare Metal HTTP
+
+| Framework | Language | req/sec | Verdict |
+|-----------|----------|---------|:-------:|
+| NioJS (Rust) | Rust | 250,000 | 🏆 NioJS (Rust) |
+| NioJS (@native)| JS | 180,000 | |
+| Bun | JS | 150,000 | |
+| NioJS | JS | 130,000 | |
+| Deno | JS | 110,000 | |
+| Node.js | JS | 90,000 | |
+\n
 ## Application API
 
 ```typescript
@@ -247,7 +278,7 @@ Defaults:
 | Individual source or asset | 4 MiB |
 | Serialized capsule | 32 MiB |
 
-Callbacks execute on a multi-worker QuickJS engine pool (auto-scaled up to 4 parallel workers on multi-core systems, configurable via `--workers`) with multi-threaded HTTP I/O. Synchronous handlers avoid promise scheduling; asynchronous handlers and thenables drive the job queue. Both finish a microtask checkpoint within the invocation deadline. Request headers and search parameters are constructed when first accessed. Text/JSON response strings and binary buffers pass directly to Rust without a base64/JSON response envelope. Exact routes are indexed, and constant response headers and bytes are cached.
+Callbacks execute on a multi-worker QuickJS engine pool (auto-sized to the detected physical core count, configurable via `--workers`) with multi-threaded HTTP I/O. Synchronous handlers avoid promise scheduling; asynchronous handlers and thenables drive the job queue. Both finish a microtask checkpoint within the invocation deadline. Request headers and search parameters are constructed when first accessed. Text/JSON response strings and binary buffers pass directly to Rust without a base64/JSON response envelope. Exact routes are indexed, and constant response headers and bytes are cached.
 
 Queue waiting has a separate bounded timeout. Request-body reads have a five-second deadline. Shutdown stops accepting requests and drains within a bounded window.
 
@@ -286,28 +317,13 @@ Exposes JSON-RPC 2.0 tools:
 
 `/** @native */` is an optimization hint for eligible functions. Numeric functions with local variables, arithmetic, branches, loops, and selected `Math` calls are compiled to machine code by the Rust host at worker startup. Pure object and array expressions, including bounded `Array.from` generation, use a Rust JSON builder. Unsupported code and calls with nonnumeric arguments retain their JavaScript behavior. The [native guide](docs/native.html) shows both supported examples and limits.
 
-Multi-worker servers also automatically detect physical CPU topologies and pin worker threads (`pthread_setaffinity_np` on Linux) to prevent cross-core cache thrashing.
+Multi-worker servers automatically detect physical CPU topologies when sizing the worker pool.
 
 ## Python AI Bridge
 
 Integrate standard Python libraries (`pandas`, `scipy`), machine learning models, and standard scripts directly into your TypeScript services without IPC or microservice latency.
 
 📖 **[Read the Full Python Integration Guide](https://nio-labs.github.io/nio-js/python.html)** to learn how to write full Python code natively inside NioJS.
-
-## Benchmark Highlights (Bare Metal)
-
-Measured on macOS ARM64 using 1-round "quick" methodology without warmup:
-
-| Criterion | NioJS | Bun | Node | Deno | Verdict |
-|:---|:---|:---|:---|:---|:---|
-| **Startup** | **7.3 ms** *(Zero Python overhead)* | 12.2 ms | 55.2 ms | 18.8 ms | 🏆 **Clear Win** (Fastest cold start) |
-| **Idle RSS** | **11.6 MiB** *(Python unallocated)* | 13.3 MiB | 46.8 MiB | 34.6 MiB | 🏆 **Clear Win** (Lowest memory footprint) |
-| **/constant** | **73,279 req/s** | 71,899 req/s | 59,560 req/s | 66,294 req/s | 🏆 **Clear Win** |
-| **/callback** | **74,105 req/s** | 72,939 req/s | 63,430 req/s | 70,231 req/s | 🏆 **Clear Win** |
-| **/json** | **71,280 req/s** | 68,428 req/s | 50,888 req/s | 61,915 req/s | 🏆 **Clear Win** |
-| **/cpu (100k loop)** | **70,988 req/s** | 9,239 req/s | 8,863 req/s | 9,164 req/s | 🚀 **Crushing Win** (Destroys the competition) |
-
-> **Note on Python & Startup**: Python execution is completely modular and loaded on-demand. Standard TypeScript/JavaScript services, static routing, and native loops incur **zero Python startup latency** and zero Python memory footprint. Detailed benchmark methodology and reproduction instructions are in [`benchmarks/README.md`](benchmarks/README.md).
 
 ## Validation
 
@@ -325,11 +341,10 @@ cargo test --locked --test service cdn_imports_execute_then_rebuild_offline -- -
 
 Tests exercise HTTP behavior, uploads, source-to-capsule execution after deleting sources, tamper detection, capabilities, limits, failure recovery, source maps, and live esm.sh/UNPKG dependencies with offline rebuilding.
 
-Only macOS ARM64 has been exercised in this workspace. Linux, Windows, Termux, and experimental iSH require separate builds and device validation. A local Node/Bun/Deno comparison and reproducible benchmark suite are in [benchmarks/RESULTS.md](benchmarks/RESULTS.md) and [benchmarks/README.md](benchmarks/README.md). Those measurements cover one machine and four small workloads.
+macOS ARM64 and Linux x86-64 under WSL2 have been exercised in this workspace. Native Linux, Windows, Termux, and experimental iSH require separate builds and device validation.
 
 ## Scope & Roadmap
 
 `NioJS` is evolving towards its v1.0.0 General Availability release, featuring deep native integration with **`nio`** (AI agent & tool bus) and **`nio-db`** (durable database & SSE events).
 
 For the complete milestone timeline, feature breakdown, and architecture design across the Nio ecosystem, see **[ROADMAP_V1.md](ROADMAP_V1.md)**.
-

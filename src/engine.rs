@@ -40,18 +40,18 @@ impl<'js> FromJs<'js> for Reply {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
         if let Some(s) = value.as_string() {
             let s_str = s.to_string()?;
-            return if let Some(json_body) = s_str.strip_prefix("\0J") {
+            return if s_str.starts_with("\0J") {
                 Ok(Self {
                     status: 200,
                     headers: Vec::new(),
-                    body: Bytes::copy_from_slice(json_body.as_bytes()),
+                    body: Bytes::from(s_str).slice(2..),
                     fast_type: 2,
                 })
             } else {
                 Ok(Self {
                     status: 200,
                     headers: Vec::new(),
-                    body: Bytes::copy_from_slice(s_str.as_bytes()),
+                    body: Bytes::from(s_str),
                     fast_type: 1,
                 })
             };
@@ -146,7 +146,7 @@ struct Graph(Arc<Capsule>);
 impl Resolver for Graph {
     fn resolve<'js>(
         &mut self,
-        _ctx: &Ctx<'js>,
+        _ctx: &Ctx<'_>,
         base: &str,
         name: &str,
         attributes: Option<ImportAttributes<'js>>,
@@ -272,11 +272,41 @@ impl Engine {
                 let plan: crate::native::JsonPlan=serde_json::from_str(&source).ok()?;
                 let mut functions=compiled_json.borrow_mut();let id=functions.len() as u32;functions.push(plan);Some(id)
             })?)?;
+            let raw_json_functions = json_functions.clone();
+            let raw_json_deadline = deadline.clone();
             let json_deadline=deadline.clone();
             globals.set("__nioInvokeJson", Function::new(ctx.clone(), move |id: u32, args: Vec<f64>| -> rquickjs::Result<String> {
                 let functions=json_functions.borrow();let plan=functions.get(id as usize).ok_or(rquickjs::Error::Unknown)?;
                 plan.run(&args,*json_deadline.lock().unwrap(),max).map_err(|e|rquickjs::Error::new_loading_message("native JSON",e.to_string()))
             })?)?;
+            globals.set("__nioInvokeJsonRaw", Function::new(ctx.clone(), move |id: u32, args: Vec<f64>| -> rquickjs::Result<Option<String>> {
+                let functions=raw_json_functions.borrow();let plan=functions.get(id as usize).ok_or(rquickjs::Error::Unknown)?;
+                plan.run_raw(&args,*raw_json_deadline.lock().unwrap(),max).map_err(|e|rquickjs::Error::new_loading_message("native JSON",e.to_string()))
+            })?)?;
+            fn create_rust_loader<'js>(ctx: Ctx<'js>) -> rquickjs::Result<Function<'js>> {
+                Function::new(ctx.clone(), move |ctx: Ctx<'js>, b64: String| -> rquickjs::Result<Object<'js>> {
+                    let bytes = base64::engine::general_purpose::STANDARD.decode(&b64).unwrap();
+                    let temp_so = std::env::temp_dir().join(format!("plugin_{}.so", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+                    std::fs::write(&temp_so, &bytes).unwrap();
+                    let lib = unsafe { libloading::Library::new(&temp_so).unwrap() };
+                    let lib = Box::leak(Box::new(lib));
+                    let obj = Object::new(ctx.clone()).unwrap();
+                    obj.set("get", Function::new(ctx.clone(), move |ctx2: Ctx<'js>, name: String| -> rquickjs::Result<Function<'js>> {
+                        let sym_name = std::ffi::CString::new(name).unwrap();
+                        let sym: Result<libloading::Symbol<unsafe extern "C" fn(f64) -> f64>, _> = unsafe { lib.get(sym_name.as_bytes()) };
+                        if let Ok(symbol) = sym {
+                            let func_ptr = *symbol;
+                            Ok(Function::new(ctx2, move |arg: f64| -> f64 {
+                                unsafe { func_ptr(arg) }
+                            }).unwrap())
+                        } else {
+                            Err(rquickjs::Error::Unknown)
+                        }
+                    }).unwrap()).unwrap();
+                    Ok(obj)
+                })
+            }
+            globals.set("__loadRust", create_rust_loader(ctx.clone())?)?;
             globals.set("__nioNative", Function::new(ctx.clone(), move |name: String| -> rquickjs::Result<String> {
                 match name.as_str() {
                     "cpu" => {
@@ -734,6 +764,67 @@ get('/', () => {
         }
         assert_eq!(result["nativeCalls"], 4);
         assert_eq!(result["jsCalls"], 4);
+        Ok(())
+    }
+
+    #[test]
+    fn native_integer_accumulator_matches_javascript() -> Result<()> {
+        let (_dir, mut engine) = fixture(
+            r#"
+import { get } from 'nio.js';
+/** @native */
+function accelerated(input) {
+  let value = 42;
+  for (let i = 0; i < 100; i++) value = (Math.imul(value ^ input, 1664525) + 1013904223) | 0;
+  return value;
+}
+function reference(input) {
+  let value = 42;
+  for (let i = 0; i < 100; i++) value = (Math.imul(value ^ input, 1664525) + 1013904223) | 0;
+  return value;
+}
+get('/', () => [0, 1, -1, 2.5, NaN, 2147483647, 4294967295].map(input => [accelerated(input), reference(input)]));
+"#,
+            1000,
+        )?;
+        let result: serde_json::Value = serde_json::from_str(&text(engine.dispatch(0, input())?))?;
+        for pair in result.as_array().unwrap() {
+            assert_eq!(pair[0], pair[1]);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn native_json_handler_uses_literal_capture_and_preserves_direct_calls() -> Result<()> {
+        let (_dir, mut engine) = fixture(
+            r#"
+import { get } from 'nio.js';
+export const hello = 'Hello World';
+/** @native */
+export function manifest() {
+  return { message: hello, items: Array.from({ length: 3 }, (_, id) => ({ id, name: `item-${id}` })) };
+}
+get('/json', manifest);
+get('/direct', () => ({ value: manifest(), type: typeof manifest().items }));
+get('/disable-stringify', () => { JSON.stringify = () => '"changed"'; return 'ok'; });
+"#,
+            1000,
+        )?;
+        assert!(
+            engine
+                .capsule
+                .modules
+                .values()
+                .any(|module| module.code.contains("__nioAttachNativeJson"))
+        );
+        let json: serde_json::Value = serde_json::from_str(&text(engine.dispatch(0, input())?))?;
+        assert_eq!(json["message"], "Hello World");
+        assert_eq!(json["items"][2]["name"], "item-2");
+        let direct: serde_json::Value = serde_json::from_str(&text(engine.dispatch(1, input())?))?;
+        assert_eq!(direct["value"], json);
+        assert_eq!(direct["type"], "object");
+        assert_eq!(text(engine.dispatch(2, input())?), "ok");
+        assert_eq!(text(engine.dispatch(0, input())?), "\"changed\"");
         Ok(())
     }
 
