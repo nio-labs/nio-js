@@ -168,33 +168,113 @@ Local imports are confined to the entrypoint's directory after canonicalization,
 
 ### Compute & Throughput Microbenchmarks
 
-| Workload | NioJS ops/s | NioJS (@native) | NioJS (Rust) | Node ops/s | Bun ops/s | Deno ops/s | Verdict |
-|---|---:|---:|---:|---:|---:|---:|:---:|
-| HTTP GET throughput | 8,307,028 | 8,335,973 | 39,594,551 | 17,869,907 | 11,718,658 | 14,149,075 | 🏆 NioJS (Rust) |
-| JSON.parse small payload | 508,849 | 525,243 | 4,629,634,300 | 1,252,496 | 1,400,407 | 1,603,489 | 🏆 NioJS (Rust) |
-| JSON.parse large payload | 1,096 | 1,227 | 180,179,186 | 4,700 | 5,776 | 5,522 | 🏆 NioJS (Rust) |
-| JSON.stringify small object | 240,563 | 216,539 | 4,132,255,600 | 1,434,033 | 1,755,692 | 2,933,480 | 🏆 NioJS (Rust) |
-| JSON.stringify medium object | 22,560 | 22,745 | 1,724,138,645 | 235,707 | 315,734 | 298,536 | 🏆 NioJS (Rust) |
-| SHA 256 hashing small buffer | 200,938 | 202,245 | 1,398,593,026 | 10,314,595 | 1,214,595 | 5,693,464 | 🏆 NioJS (Rust) |
-| SHA 256 hashing large buffer | 3,145 | 3,205 | 1,091,584 | 68,254 | 303,297 | 75,835 | 🏆 NioJS (Rust) |
-| Buffer copy 64 KB | 418,274 | 423,970 | 466,999 | 50,307 | 95,171 | 44,750 | 🏆 NioJS (Rust) |
-| Array map plus reduce | 991 | 1,001 | 222,433 | 9,376 | 21,280 | 8,516 | 🏆 NioJS (Rust) |
-| String concatenation | 8,501 | 8,019 | 299,208 | 136,057 | 254,140 | 154,459 | 🏆 NioJS (Rust) |
-| Integer loop plus arithmetic | 1,401 | 9,428 | 3,314,400 | 32,809 | 30,647 | 32,137 | 🏆 NioJS (Rust) |
-| Integer loop with randomized input | 1,737 | 1,728 | 3,329,979 | 32,722 | 31,086 | 31,980 | 🏆 NioJS (Rust) |
+<div align="center" style="overflow-x: auto;">
+<table>
+  <thead>
+    <tr>
+      <th nowrap>Workload</th>
+      <th align="right" nowrap>NioJS ops/s</th>
+      <th align="right" nowrap>NioJS (@native)</th>
+      <th align="right" nowrap>NioJS (Rust)</th>
+      <th align="right" nowrap>Node ops/s</th>
+      <th align="right" nowrap>Bun ops/s</th>
+      <th align="right" nowrap>Deno ops/s</th>
+      <th align="center" nowrap>Verdict</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td nowrap>HTTP GET throughput</td>
+      <td align="right" nowrap>8,307,028</td><td align="right" nowrap>8,335,973</td><td align="right" nowrap>39,594,551</td>
+      <td align="right" nowrap>17,869,907</td><td align="right" nowrap>11,718,658</td><td align="right" nowrap>14,149,075</td><td align="center" nowrap>🏆 NioJS (Rust)</td>
+    </tr>
+    <tr>
+      <td nowrap>JSON.parse small payload</td>
+      <td align="right" nowrap>508,849</td><td align="right" nowrap>525,243</td><td align="right" nowrap>4,629,634,300</td>
+      <td align="right" nowrap>1,252,496</td><td align="right" nowrap>1,400,407</td><td align="right" nowrap>1,603,489</td><td align="center" nowrap>🏆 NioJS (Rust)</td>
+    </tr>
+    <tr>
+      <td nowrap>JSON.parse large payload</td>
+      <td align="right" nowrap>1,096</td><td align="right" nowrap>1,227</td><td align="right" nowrap>180,179,186</td>
+      <td align="right" nowrap>4,700</td><td align="right" nowrap>5,776</td><td align="right" nowrap>5,522</td><td align="center" nowrap>🏆 NioJS (Rust)</td>
+    </tr>
+    <tr>
+      <td nowrap>JSON.stringify small object</td>
+      <td align="right" nowrap>240,563</td><td align="right" nowrap>216,539</td><td align="right" nowrap>4,132,255,600</td>
+      <td align="right" nowrap>1,434,033</td><td align="right" nowrap>1,755,692</td><td align="right" nowrap>2,933,480</td><td align="center" nowrap>🏆 NioJS (Rust)</td>
+    </tr>
+    <tr>
+      <td nowrap>JSON.stringify medium object</td>
+      <td align="right" nowrap>22,560</td><td align="right" nowrap>22,745</td><td align="right" nowrap>1,724,138,645</td>
+      <td align="right" nowrap>235,707</td><td align="right" nowrap>315,734</td><td align="right" nowrap>298,536</td><td align="center" nowrap>🏆 NioJS (Rust)</td>
+    </tr>
+    <tr>
+      <td nowrap>SHA 256 hashing small buffer</td>
+      <td align="right" nowrap>200,938</td><td align="right" nowrap>202,245</td><td align="right" nowrap>1,398,593,026</td>
+      <td align="right" nowrap>10,314,595</td><td align="right" nowrap>1,214,595</td><td align="right" nowrap>5,693,464</td><td align="center" nowrap>🏆 NioJS (Rust)</td>
+    </tr>
+    <tr>
+      <td nowrap>SHA 256 hashing large buffer</td>
+      <td align="right" nowrap>3,145</td><td align="right" nowrap>3,205</td><td align="right" nowrap>1,091,584</td>
+      <td align="right" nowrap>68,254</td><td align="right" nowrap>303,297</td><td align="right" nowrap>75,835</td><td align="center" nowrap>🏆 NioJS (Rust)</td>
+    </tr>
+    <tr>
+      <td nowrap>Buffer copy 64 KB</td>
+      <td align="right" nowrap>418,274</td><td align="right" nowrap>423,970</td><td align="right" nowrap>466,999</td>
+      <td align="right" nowrap>50,307</td><td align="right" nowrap>95,171</td><td align="right" nowrap>44,750</td><td align="center" nowrap>🏆 NioJS (Rust)</td>
+    </tr>
+    <tr>
+      <td nowrap>Array map plus reduce</td>
+      <td align="right" nowrap>991</td><td align="right" nowrap>1,001</td><td align="right" nowrap>222,433</td>
+      <td align="right" nowrap>9,376</td><td align="right" nowrap>21,280</td><td align="right" nowrap>8,516</td><td align="center" nowrap>🏆 NioJS (Rust)</td>
+    </tr>
+    <tr>
+      <td nowrap>String concatenation</td>
+      <td align="right" nowrap>8,501</td><td align="right" nowrap>8,019</td><td align="right" nowrap>299,208</td>
+      <td align="right" nowrap>136,057</td><td align="right" nowrap>254,140</td><td align="right" nowrap>154,459</td><td align="center" nowrap>🏆 NioJS (Rust)</td>
+    </tr>
+    <tr>
+      <td nowrap>Integer loop plus arithmetic</td>
+      <td align="right" nowrap>1,401</td><td align="right" nowrap>9,428</td><td align="right" nowrap>3,314,400</td>
+      <td align="right" nowrap>32,809</td><td align="right" nowrap>30,647</td><td align="right" nowrap>32,137</td><td align="center" nowrap>🏆 NioJS (Rust)</td>
+    </tr>
+    <tr>
+      <td nowrap>Integer loop with randomized input</td>
+      <td align="right" nowrap>1,737</td><td align="right" nowrap>1,728</td><td align="right" nowrap>3,329,979</td>
+      <td align="right" nowrap>32,722</td><td align="right" nowrap>31,086</td><td align="right" nowrap>31,980</td><td align="center" nowrap>🏆 NioJS (Rust)</td>
+    </tr>
+  </tbody>
+</table>
+</div>
 
 ### Benchmark Highlights (Bare Metal HTTP)
 
 *Measured on macOS ARM64 using 1-round "quick" methodology without warmup:*
 
-| Criterion | NioJS (Base) | NioJS (@native) | NioJS (Rust) | Bun | Node | Deno | Verdict |
-|---|---|---|---|---|---|---|---|
-| **Startup** | **7.3 ms** | 7.3 ms | 14.5 ms | 12.2 ms | 55.2 ms | 18.8 ms | 🏆 Clear Win (NioJS Base) |
-| **Idle RSS** | **11.6 MiB** | 11.6 MiB | 13.8 MiB | 13.3 MiB | 46.8 MiB | 34.6 MiB | 🏆 Clear Win (NioJS Base) |
-| **/constant** | **73,279 req/s** | **73,279 req/s** | **73,279 req/s** | 71,899 req/s | 59,560 req/s | 66,294 req/s | 🏆 Clear Win |
-| **/callback** | **74,105 req/s** | **74,105 req/s** | **74,105 req/s** | 72,939 req/s | 63,430 req/s | 70,231 req/s | 🏆 Clear Win |
-| **/json** | **71,280 req/s** | **71,280 req/s** | 73,150 req/s | 68,428 req/s | 50,888 req/s | 61,915 req/s | 🏆 Clear Win (Rust parsing) |
-| **/cpu (100k loop)** | 4,215 req/s | 70,988 req/s | **73,250 req/s** | 9,239 req/s | 8,863 req/s | 9,164 req/s | 🚀 Crushing Win (Rust/Native) |
+<div align="center" style="overflow-x: auto;">
+<table>
+  <thead>
+    <tr>
+      <th nowrap>Criterion</th>
+      <th nowrap>NioJS (Base)</th>
+      <th nowrap>NioJS (@native)</th>
+      <th nowrap>NioJS (Rust)</th>
+      <th nowrap>Bun</th>
+      <th nowrap>Node</th>
+      <th nowrap>Deno</th>
+      <th nowrap>Verdict</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td nowrap><strong>Startup</strong></td><td nowrap><strong>7.3 ms</strong></td><td nowrap>7.3 ms</td><td nowrap>14.5 ms</td><td nowrap>12.2 ms</td><td nowrap>55.2 ms</td><td nowrap>18.8 ms</td><td nowrap>🏆 Clear Win (NioJS Base)</td></tr>
+    <tr><td nowrap><strong>Idle RSS</strong></td><td nowrap><strong>11.6 MiB</strong></td><td nowrap>11.6 MiB</td><td nowrap>13.8 MiB</td><td nowrap>13.3 MiB</td><td nowrap>46.8 MiB</td><td nowrap>34.6 MiB</td><td nowrap>🏆 Clear Win (NioJS Base)</td></tr>
+    <tr><td nowrap><strong>/constant</strong></td><td nowrap><strong>73,279 req/s</strong></td><td nowrap><strong>73,279 req/s</strong></td><td nowrap><strong>73,279 req/s</strong></td><td nowrap>71,899 req/s</td><td nowrap>59,560 req/s</td><td nowrap>66,294 req/s</td><td nowrap>🏆 Clear Win</td></tr>
+    <tr><td nowrap><strong>/callback</strong></td><td nowrap><strong>74,105 req/s</strong></td><td nowrap><strong>74,105 req/s</strong></td><td nowrap><strong>74,105 req/s</strong></td><td nowrap>72,939 req/s</td><td nowrap>63,430 req/s</td><td nowrap>70,231 req/s</td><td nowrap>🏆 Clear Win</td></tr>
+    <tr><td nowrap><strong>/json</strong></td><td nowrap><strong>71,280 req/s</strong></td><td nowrap><strong>71,280 req/s</strong></td><td nowrap>73,150 req/s</td><td nowrap>68,428 req/s</td><td nowrap>50,888 req/s</td><td nowrap>61,915 req/s</td><td nowrap>🏆 Clear Win (Rust parsing)</td></tr>
+    <tr><td nowrap><strong>/cpu (100k loop)</strong></td><td nowrap>4,215 req/s</td><td nowrap>70,988 req/s</td><td nowrap><strong>73,250 req/s</strong></td><td nowrap>9,239 req/s</td><td nowrap>8,863 req/s</td><td nowrap>9,164 req/s</td><td nowrap>🚀 Crushing Win (Rust/Native)</td></tr>
+  </tbody>
+</table>
+</div>
 
 With this, NioJS looks unbeatable for anyone seeking peak performance without leaving the JS ecosystem.
 ## Application API
