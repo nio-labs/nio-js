@@ -510,3 +510,10 @@ tr:nth-child(even) td {
     font-size: 26px;
   }
 }
+
+.hybrid-card {
+  background-color: var(--code-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+}
