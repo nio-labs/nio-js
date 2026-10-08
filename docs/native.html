@@ -59,9 +59,8 @@
         <div class="nav-section">
           <div class="nav-section-title">Hybrid Engine & AI</div>
           <a href="native.html" class="nav-link">9. Native Acceleration (/** @native */)</a>
-          <a href="index.html#multi-worker" class="nav-link">10. Multi-Core Worker Pinning</a>
+          <a href="index.html#multi-worker" class="nav-link">10. Multi-Worker Execution</a>
           <a href="python.html" class="nav-link">11. In-Process Python Guide</a>
-          <a href="index.html#benchmarks" class="nav-link">12. Bare-Metal Benchmarks</a>
         </div>
 
         <div class="nav-section">
@@ -213,10 +212,6 @@ get(&#x27;/ops/shards&#x27;, ({ query }) =&gt; {
           <p>
             Calls involving closures, custom objects, or other JavaScript features use the original implementation. Native execution follows the configured request deadline and response-size limit. Rebuild existing <code>.njs</code> capsules to use this implementation.
           </p>
-          <p>
-            The older CPU and JSON benchmark numbers were measured with a name-based substitution that did not preserve function behavior. They are withdrawn until the corrected implementation is benchmarked again.
-          </p>
-
         </section>
         
         <footer class="docs-footer" style="margin-top: 60px; text-align: center; color: var(--text-secondary); border-top: 1px solid var(--border-color); padding-top: 20px;">

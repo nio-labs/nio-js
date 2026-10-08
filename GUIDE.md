@@ -16,7 +16,7 @@
    - [Consuming Bodies (JSON & Multipart)](#consuming-bodies-json--multipart)
 5. [Hybrid Performance & Native Acceleration](#5-hybrid-performance--native-acceleration)
    - [The `/** @native */` Directive](#the-native-directive)
-   - [Multi-Worker Core Pinning](#multi-worker-core-pinning)
+   - [Multi-Worker Execution](#multi-worker-execution)
 6. [In-Process Python AI (Polyglot Bridge)](#6-in-process-python-ai-polyglot-bridge)
 7. [Dependencies Without `node_modules`](#7-dependencies-without-node_modules)
    - [HTTPS & CDN Imports (esm.sh / UNPKG)](#https--cdn-imports-esmsh--unpkg)
@@ -38,7 +38,6 @@ Traditional JavaScript runtimes (Node.js, Deno, Bun) were designed for full serv
 
 `NioJS` takes a fundamentally different approach:
 - **Engine**: Embedded [QuickJS](https://bellard.org/quickjs/) running inside a multi-worker **Rust host** (built with Tokio & Hyper).
-- **Sub-Millisecond Cold Starts**: Services boot in **< 1 ms** with under **15 MB** memory baseline.
 - **Hybrid Compute**: Lightweight JS controls routing and business logic, while computationally intensive tasks are compiled or offloaded directly to **Rust** or **in-process CPython**.
 - **Self-Contained Capsules**: Applications bundle into a single portable `.njs` capsule containing immutable code, SHA-256 digests, and assets.
 
@@ -265,31 +264,16 @@ get('/primes', ({ query }) => {
 
 Other supported functions can use local arithmetic, bitwise operations, `if`, `for`, `while`, `break`, `continue`, and selected `Math` operations. Pure object and array expressions can use bounded `Array.from` generation. The [native guide](docs/native.html) lists the contract and limits. Rebuild old capsules to get the corrected behavior.
 
-### Multi-Worker Core Pinning
+### Multi-Worker Execution
 
-Scale effortlessly across all physical and logical CPU cores:
+Run isolated JavaScript runtimes on worker threads. Set the worker count with `--workers`:
 
 ```bash
-# Pin 8 dedicated Tokio worker threads
+# Run with 8 JavaScript workers
 nio-js run app.ts --workers 8 --port 3000
 ```
 
-Each worker runs its own isolated QuickJS runtime instance sharing the same port listener via Tokio socket reuse, guaranteeing linear multi-core scaling.
-
-### Benchmark Highlights (Bare Metal)
-
-Measured on macOS ARM64 using 1-round "quick" methodology without warmup:
-
-| Criterion | NioJS | Bun | Node | Deno | Verdict |
-|:---|:---|:---|:---|:---|:---|
-| **Startup** | **7.3 ms** *(Zero Python overhead)* | 12.2 ms | 55.2 ms | 18.8 ms | 🏆 **Clear Win** (Fastest cold start) |
-| **Idle RSS** | **11.6 MiB** *(Python unallocated)* | 13.3 MiB | 46.8 MiB | 34.6 MiB | 🏆 **Clear Win** (Lowest memory footprint) |
-| **/constant** | **73,279 req/s** | 71,899 req/s | 59,560 req/s | 66,294 req/s | 🏆 **Clear Win** |
-| **/callback** | **74,105 req/s** | 72,939 req/s | 63,430 req/s | 70,231 req/s | 🏆 **Clear Win** |
-| **/json** | **71,280 req/s** | 68,428 req/s | 50,888 req/s | 61,915 req/s | 🏆 **Clear Win** |
-| **/cpu (100k loop)** | **70,988 req/s** | 9,239 req/s | 8,863 req/s | 9,164 req/s | 🚀 **Crushing Win** (Destroys the competition) |
-
-> **Note on Python & Startup**: Python execution is completely modular and loaded on-demand. Standard TypeScript/JavaScript services, static routing, and native loops incur **zero Python startup latency** and zero Python memory footprint. Detailed benchmark methodology and reproduction instructions are in [`benchmarks/README.md`](benchmarks/README.md).
+Each worker runs its own QuickJS runtime and shares the server's HTTP listener.
 
 ---
 
@@ -415,7 +399,7 @@ get('/logo', asset('banner.png'));
 
 ### Structured Diagnostics (`nio-js check`)
 
-Run ultra-fast pre-flight checks without spinning up the network listener:
+Run pre-flight checks without starting the network listener:
 
 ```bash
 # Output JSON formatted specifically for LLM tool consumption
@@ -482,4 +466,3 @@ curl -i http://localhost:3000/health
 ---
 
 *For upcoming roadmap milestones including native `nio-db` and `nio` integrations, check the [ROADMAP_V1.md on GitHub](https://github.com/nio-labs/nio-js/blob/main/ROADMAP_V1.md).*
-

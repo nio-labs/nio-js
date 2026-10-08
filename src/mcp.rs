@@ -285,10 +285,7 @@ mod tests {
         let directory = tempfile::tempdir()?;
         let file = directory.path().join("app.js");
         std::fs::write(&file, "export const answer = 42;\n")?;
-        let (out, is_err) = handle_tool_call(
-            "nio_check",
-            &serde_json::json!({"file": file}),
-        );
+        let (out, is_err) = handle_tool_call("nio_check", &serde_json::json!({"file": file}));
         assert!(!is_err);
         let val: serde_json::Value = serde_json::from_str(&out).unwrap();
         assert_eq!(val["status"], "ok");

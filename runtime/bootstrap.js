@@ -1,5 +1,8 @@
 (() => {
   const routes = [];
+  const nativeJsonHandlers = new WeakMap();
+  globalThis.__nioAttachNativeJson = (handler, raw) => nativeJsonHandlers.set(handler, raw);
+  const nativeStringify = JSON.stringify;
   const nativeParse = JSON.parse;
   globalThis.__nioOriginalString = String;
   globalThis.__nioOriginalMath = Math;
@@ -142,9 +145,13 @@
     if (typeof path !== 'string' || !path.startsWith('/') || /[?#]/.test(path)) throw new TypeError('Invalid route path');
     if (typeof handler !== 'function' && typeof handler !== 'string' && !(handler instanceof Blob) && handler?.__nioReply !== true && !(handler && typeof handler === 'object' && (Array.isArray(handler) || Object.getPrototypeOf(handler) === Object.prototype))) throw new TypeError('Handler must be a function or supported constant response');
     if (routes.some(r => r.method === method && r.path === path)) throw new Error('Duplicate route');
-    routes.push({ method, path, handler });
+    routes.push({ method, path, handler, rawJson: typeof handler === 'function' ? nativeJsonHandlers.get(handler) : undefined });
   };
   const encodeReply = result => {
+    if (typeof result === 'string') {
+      if (result.length > __nioMaxBody) throw new RangeError('Response exceeds byte limit');
+      return result;
+    }
     let options = {};
     if (result?.__nioReply === true) { options = result.options; result = result.body; }
     let body, type;
@@ -268,9 +275,15 @@
   }
   const emptyReq = new LazyRequest({ method: 'GET', url: '', headers: [], query: {}, search: '', params: {}, body: '', form: null });
   globalThis.__nioDispatch = (route, input) => {
-    const handler = routes[route]?.handler;
+    const registered = routes[route];
+    const handler = registered?.handler;
     if (typeof handler !== 'function') throw new Error('Invalid callback route');
-    const result = handler.length === 0 ? handler() : handler(new LazyRequest(input));
+    const request = handler.length === 0 ? undefined : new LazyRequest(input);
+    if (registered.rawJson && JSON.stringify === nativeStringify) {
+      const raw = handler.length === 0 ? registered.rawJson() : registered.rawJson(request);
+      if (typeof raw === 'string') return '\0J' + raw;
+    }
+    const result = handler.length === 0 ? handler() : handler(request);
     return result !== null && (typeof result === 'object' || typeof result === 'function') && typeof result.then === 'function'
       ? Promise.resolve(result).then(encodeReply) : encodeReply(result);
   };

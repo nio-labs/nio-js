@@ -745,9 +745,13 @@ impl Emit<'_, '_> {
             Expr::Binary(op, a, b) => match op.as_str() {
                 "+" | "-" | "*" | "%" => {
                     let signed = |range: Option<(i64, i64)>| {
-                        range.is_some_and(|(min, max)| min >= -9007199254740991 && max <= 9007199254740991)
+                        range.is_some_and(|(min, max)| {
+                            min >= -9007199254740991 && max <= 9007199254740991
+                        })
                     };
-                    if signed(self.runtime_integer_range(a)) && signed(self.runtime_integer_range(b)) {
+                    if signed(self.runtime_integer_range(a))
+                        && signed(self.runtime_integer_range(b))
+                    {
                         let av64 = self.expr_i64(a, depth + 1)?;
                         let bv64 = self.expr_i64(b, depth + 1)?;
                         let res64 = match op.as_str() {
@@ -759,7 +763,7 @@ impl Emit<'_, '_> {
                                 // But JS % handles negative correctly for srem, except for negative 0.
                                 // Actually, srem is perfect for JS integers that aren't zero-result negative.
                                 self.b.ins().srem(av64, bv64)
-                            },
+                            }
                             _ => unreachable!(),
                         };
                         self.b.ins().fcvt_from_sint(types::F64, res64)
@@ -773,7 +777,7 @@ impl Emit<'_, '_> {
                             "%" => {
                                 let call = self.b.ins().call(self.rem, &[av, bv]);
                                 self.b.inst_results(call)[0]
-                            },
+                            }
                             _ => unreachable!(),
                         }
                     }

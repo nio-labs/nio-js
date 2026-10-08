@@ -1,7 +1,7 @@
 # Roadmap to v1.0.0: The Agent-Native Worker Runtime
 
 > **Target:** Stable General Availability (GA) v1.0.0  
-> **Mission:** Establish `nio-js` as the ultra-fast, sub-millisecond polyglot worker runtime natively integrated into the Nio ecosystem (`nio` + `nio-db` + `nio-js`).
+> **Mission:** Establish `nio-js` as a polyglot worker runtime natively integrated into the Nio ecosystem (`nio` + `nio-db` + `nio-js`).
 
 ---
 
@@ -24,7 +24,7 @@
 
 - **`nio`** ([repo](file:///home/mn/nio-labs/nio)): Terminal AI coding agent, autonomous tool dispatch, natural-language workflow planner.
 - **`nio-db`** ([repo](file:///home/mn/nio-labs/nio-db)): Standalone Rust storage server with durable append-only journal, AlaSQL compiler, SSE event broadcast, and bucket storage.
-- **`nio-js`** ([repo](file:///home/mn/nio-labs/nio-js)): High-performance worker runtime (<1ms boot, 68k+ req/sec, hybrid Rust/JS engine, in-process CPython bridge, MCP server).
+- **`nio-js`** ([repo](file:///home/mn/nio-labs/nio-js)): Worker runtime with a hybrid Rust/JS engine, in-process CPython bridge, and MCP server.
 
 ---
 
@@ -205,7 +205,7 @@
 
 | Release | Focus | Key Deliverables |
 |---|---|---|
-| **v0.2.0** | Hybrid Engine & Performance | Bare-metal Rust offloading, in-process PyO3 Python AI, stdio MCP server, 68k+ req/sec |
+| **v0.2.0** | Hybrid Engine & Performance | Bare-metal Rust offloading, in-process PyO3 Python AI, stdio MCP server |
 | **v0.2.6** *(Current)* | Scaffolding & Task Runner | `nio-js init`, `nio-js task`, `nio.toml`, Docker deployment |
 | **v0.3.0** | Protocols & Streaming | SSE token streaming, WebSockets, W3C OpenTelemetry tracing |
 | **v0.4.0** | `nio-db` Storage Tier | Native `db` client, reactive SSE mutation listener, in-memory query cache |
