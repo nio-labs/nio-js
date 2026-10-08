@@ -1,6 +1,6 @@
 {
   "name": "@nio-labs/nio-js",
-  "version": "0.2.8",
+  "version": "0.3.0",
   "description": "The hybrid, agent-native worker runtime: TypeScript APIs, native Rust acceleration, in-process Python AI, and portable .njs capsules",
   "license": "MIT",
   "type": "module",
